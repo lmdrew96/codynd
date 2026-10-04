@@ -3,6 +3,7 @@ import type { EngineInterface, On } from 'claude-code'
 import { statusLine, truncate } from './patch-status.ts'
 
 // #12 Focus slot: Cody names the current non-patch work; the status line shows "🎯 <focus>" when no patch is active.
+// /topic is the manual override.
 // Built against Claude Code 2.1.289.
 
 const MAX_FOCUS = 40
@@ -42,12 +43,16 @@ export const registerFocus = (on: On): void => {
       name: 'clear_focus',
       description: 'Clear the status-line focus when the non-patch work wraps up.',
     })
-    await $.command.register({
-      name: 'focus',
-      description: 'Set the status-line focus by hand: /focus <label>, or /focus alone to clear',
-      argumentHint: '[label]',
-      immediate: true,
-    })
+    // Not /focus: that's a built-in, and a session start refuses the name. A refusal here mustn't
+    // undo the tools above, so it's logged rather than thrown.
+    await $.command
+      .register({
+        name: 'topic',
+        description: 'Set the status-line focus by hand: /topic <label>, or /topic alone to clear',
+        argumentHint: '[label]',
+        immediate: true,
+      })
+      .catch((err: unknown) => $.ui.log(`focus: /topic not registered: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' }))
     return result
   })
 
@@ -64,7 +69,7 @@ export const registerFocus = (on: On): void => {
     return { result: 'Focus cleared.' }
   })
 
-  on('command.run', { command: 'focus' }, async ($, e) => {
+  on('command.run', { command: 'topic' }, async ($, e) => {
     const label = cleanFocus(e.args)
     await setFocus($, label)
     return { text: label === null ? 'Focus cleared.' : `Focus: ${label}` }

@@ -50,7 +50,7 @@ const start = async ($: Engine): Promise<void> => {
 }
 
 const focusCommand = async ($: Engine, args: string): Promise<string | undefined> =>
-  (await $.command.run({ command: 'focus', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } })).text
+  (await $.command.run({ command: 'topic', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } })).text
 
 describe('focus slot', () => {
   test('Cody sets and clears the focus; the line follows', async ($, on) => {
@@ -69,7 +69,7 @@ describe('focus slot', () => {
     expect(statuses.at(-1)?.startsWith('🩹 #12 Focus slot')).toBe(true)
   })
 
-  test('/focus sets by hand; bare /focus clears', async ($, on) => {
+  test('/topic sets by hand; bare /topic clears', async ($, on) => {
     const statuses = world(on)
     await start($)
     expect(await focusCommand($, 'Reading the mod docs')).toBe('Focus: Reading the mod docs')
