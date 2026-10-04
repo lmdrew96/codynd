@@ -1,6 +1,6 @@
 {
   "name": "codynd",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "ND-friendly mods for Claude Code: patch status line and friends.",
   "author": {
     "name": "Nae (ADHDesigns)",
@@ -26,6 +26,12 @@
       "title": "Body check interval (minutes)",
       "description": "Minutes of continuous work before a gentle body-check nudge.",
       "default": 90
+    },
+    "kindlingServer": {
+      "type": "string",
+      "title": "Kindling MCP server",
+      "description": "The Kindling server's name as /mcp lists it (for /park).",
+      "default": "claude.ai Kindling"
     }
   }
 }
