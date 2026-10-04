@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import type { Board, BoardRow } from '../types'
-import { CHIME, DONE_TOAST_MS, doneMessage } from './done-chime.ts'
+import { CHIMES, DONE_TOAST_MS, doneMessage, nextCelebration } from './done-chime.ts'
 import { DEFAULT_SERVER, parsePatches, patchesForCwd, statusLine, type Patch } from './patch-status.ts'
 
 // #11 /patches: this repo's ChaosPatch board in a pane, driven by buttons, no model turn.
@@ -13,6 +13,7 @@ const board = atom({ plugin: 'codynd', key: 'board' } as const, null)
 // The same state as patch-status.ts's activePatches (the validator wants atoms declared per file).
 const activePatches = atom({ plugin: 'codynd', key: 'activePatches' } as const, [])
 const focus = atom({ plugin: 'codynd', key: 'focus' } as const, null)
+const lastCelebration = atom({ plugin: 'codynd', key: 'lastCelebration' } as const, null)
 
 // "claude.ai ChaosPatch" is listed to the model as mcp__claude_ai_ChaosPatch__<tool>.
 export const mcpToolName = (server: string, tool: string): string =>
@@ -54,10 +55,13 @@ const loadBoard = async ($: EngineInterface, server: string): Promise<void> => {
 // The done chime, played here: a plugin's own $.tool.call skips its own tool.call hooks,
 // so done-chime.ts never sees a Done pressed in this pane.
 const celebrate = async ($: EngineInterface, title: string, withSound: boolean): Promise<void> => {
-  $.ui.toast(doneMessage(title), { timeoutMs: DONE_TOAST_MS })
+  const pick = nextCelebration(await read($, lastCelebration), [Math.random(), Math.random()])
+  // Toast before the state write: written after it, the toast skipped toast-queue.ts's hook.
+  $.ui.toast(doneMessage(title, pick.opener), { timeoutMs: DONE_TOAST_MS })
+  await update($, lastCelebration, () => pick)
   if (!withSound) return
   try {
-    await $.audio.play({ asset: CHIME })
+    await $.audio.play({ asset: CHIMES[pick.sound] ?? CHIMES[0] })
   } catch (err) {
     $.ui.log(`patches: sound failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
   }

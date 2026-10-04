@@ -1,11 +1,17 @@
+import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
+import type { Celebration } from '../types'
 import { truncate } from './patch-status.ts'
 
 // #2 Done chime: a toast (and optional sound) when a ChaosPatch patch is completed.
+// #8 Chime variety: the sound and the toast's opener rotate, never the same twice running.
 // Built against Claude Code 2.1.289.
 
 const COMPLETE_TOOL = /__cp_complete_patch$/
-export const CHIME = 'sounds/done.wav'
+// Original synthesized clips. done.wav comes first: a session's first win is always the classic.
+export const CHIMES = ['sounds/done.wav', 'sounds/arpeggio.wav', 'sounds/marimba.wav', 'sounds/blip-ding.wav'] as const
+// patches-pane.tsx shares this through the same atom, so a Done there counts as the last pick too.
+const lastCelebration = atom({ plugin: 'codynd', key: 'lastCelebration' } as const, null)
 // Toasts can't be sticky (only a timeout), so the win stays up long enough to actually see.
 export const DONE_TOAST_MS = 10_000
 
@@ -21,17 +27,36 @@ export const patchTitle = (text: string | undefined): string | undefined => {
   }
 }
 
-// toast-queue.ts recognizes done toasts by this prefix.
-export const DONE_PREFIX = '🎉 Patch done'
+// Openers for the done toast; the first is the classic. toast-queue.ts recognizes done toasts by them.
+export const DONE_OPENERS = ['🎉 Patch done', '✨ Shipped', '🌱 One less thing', '🏁 Done and dusted', '💥 Knocked out'] as const
 
-export const doneMessage = (title: string | undefined): string =>
-  title === undefined ? `${DONE_PREFIX}!` : `${DONE_PREFIX}: ${truncate(title)}`
+export const isDoneToast = (text: string): boolean => DONE_OPENERS.some(opener => text.startsWith(opener))
+
+export const doneMessage = (title: string | undefined, opener: number = 0): string => {
+  const head = DONE_OPENERS[opener] ?? DONE_OPENERS[0]
+  return title === undefined ? `${head}!` : `${head}: ${truncate(title)}`
+}
+
+// Any index but `last`, drawn by `roll` in [0, 1); no last pick means the classic (0).
+export const pickOther = (count: number, last: number | undefined, roll: number): number => {
+  if (last === undefined || count < 2) return 0
+  const n = Math.floor(roll * (count - 1))
+  return n >= last ? n + 1 : n
+}
+
+export const nextCelebration = (last: Celebration | null, rolls: [number, number]): Celebration => ({
+  sound: pickOther(CHIMES.length, last?.sound, rolls[0]),
+  opener: pickOther(DONE_OPENERS.length, last?.opener, rolls[1]),
+})
 
 const celebrate = async ($: EngineInterface, title: string | undefined, withSound: boolean): Promise<void> => {
-  $.ui.toast(doneMessage(title), { timeoutMs: DONE_TOAST_MS })
+  const pick = nextCelebration(await read($, lastCelebration), [Math.random(), Math.random()])
+  // Toast before the state write: written after it, the toast skipped toast-queue.ts's hook.
+  $.ui.toast(doneMessage(title, pick.opener), { timeoutMs: DONE_TOAST_MS })
+  await update($, lastCelebration, () => pick)
   if (!withSound) return
   try {
-    await $.audio.play({ asset: CHIME })
+    await $.audio.play({ asset: CHIMES[pick.sound] ?? CHIMES[0] })
   } catch (err) {
     $.ui.log(`done-chime: sound failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
   }

@@ -1,5 +1,5 @@
 import type { On } from 'claude-code'
-import { DONE_PREFIX } from './done-chime.ts'
+import { isDoneToast } from './done-chime.ts'
 
 // Toast queue: a done toast is never replaced by a later CodyND toast. Outside fullscreen a
 // toast is one line on the notification bar, so a newer one hides the older.
@@ -21,7 +21,7 @@ export const registerToastQueue = (on: On): void => {
   let holdUntil = 0
 
   on('ui.toast', async ($, e, next) => {
-    const slot = schedule(await $.clock.now(), holdUntil, e.text.startsWith(DONE_PREFIX), e.timeoutMs)
+    const slot = schedule(await $.clock.now(), holdUntil, isDoneToast(e.text), e.timeoutMs)
     holdUntil = slot.holdUntil
     if (slot.delayMs === 0) return next(e)
     // Re-raised when its turn comes; by then the hold has passed, so it shows (or waits for a newer done toast).

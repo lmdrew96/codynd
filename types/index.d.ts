@@ -13,6 +13,9 @@ export type Patch = {
   started_at: string | null
 }
 
+// The last done celebration's picks: indexes into the chime and toast-opener pools.
+export type Celebration = { sound: number; opener: number }
+
 export type BoardRow = { id: string; title: string }
 
 // null while loading; `error` when ChaosPatch couldn't be reached.
@@ -30,6 +33,8 @@ declare module 'claude-code' {
       focus: string | null
       // The focus just replaced, offered once to /park; null when there's no offer showing.
       parkOffer: string | null
+      // So the next win sounds and reads different; null until the session's first.
+      lastCelebration: Celebration | null
     }
   }
 }
