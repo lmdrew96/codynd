@@ -5,6 +5,7 @@ import { registerPatchStatus } from './patch-status.ts'
 import { registerPatchesPane } from './patches-pane.tsx'
 import { registerReentryCard } from './reentry-card.tsx'
 import { registerSessionClock } from './session-clock.ts'
+import { registerWins } from './wins.ts'
 
 export const register: Register = (on, options) => {
   registerPatchStatus(on, options)
@@ -13,4 +14,5 @@ export const register: Register = (on, options) => {
   registerReentryCard(on, options)
   registerPark(on, options)
   registerPatchesPane(on, options)
+  registerWins(on, options)
 }
