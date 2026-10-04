@@ -4,7 +4,8 @@ import type { NextEvent } from '../types'
 import { truncate } from './patch-status.ts'
 
 // Next-event countdown: the next ControlledChaos event in the status line, so time stays visible
-// during hyperfocus. Visibility only: one heads-up toast at 15 minutes, never a repeat.
+// during hyperfocus. Visibility only: one heads-up at 15 minutes (a toast and a cabin "bing-bong"),
+// never a repeat.
 // Built against Claude Code 2.1.289.
 
 const DEFAULT_SERVER = 'claude.ai ControlledChaos'
@@ -12,6 +13,8 @@ const REFRESH_MS = 5 * 60_000
 const TICK_MS = 60_000
 export const WINDOW_MS = 3 * 60 * 60_000
 export const SOON_MS = 15 * 60_000
+// An airline cabin chime, to go with "Start landing the plane"; unlike the done chimes and the yoo-hoo.
+export const LANDING_CHIME = 'sounds/landing.wav'
 
 const nextEvent = atom({ plugin: 'codynd', key: 'nextEvent' } as const, null)
 
@@ -74,8 +77,17 @@ const refresh = async ($: EngineInterface, server: string): Promise<void> => {
   }
 }
 
+// Detached: the heads-up never waits on the sound.
+const playLanding = async ($: EngineInterface): Promise<void> => {
+  try {
+    await $.audio.play({ asset: LANDING_CHIME })
+  } catch (err) {
+    $.ui.log(`next-event: sound failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
+  }
+}
+
 // One heads-up per event, the first tick it's within 15 minutes.
-const checkSoon = async ($: EngineInterface, warned: Set<string>): Promise<void> => {
+const checkSoon = async ($: EngineInterface, warned: Set<string>, withSound: boolean): Promise<void> => {
   try {
     const event = await read($, nextEvent)
     if (event === null || warned.has(event.id)) return
@@ -83,6 +95,7 @@ const checkSoon = async ($: EngineInterface, warned: Set<string>): Promise<void>
     if (left <= 0 || left > SOON_MS) return
     warned.add(event.id)
     $.ui.toast(landingToast(event, Math.ceil(left / 60_000)), { timeoutMs: 10_000 })
+    if (withSound) void playLanding($)
   } catch (err) {
     $.ui.log(`next-event: heads-up failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
   }
@@ -91,13 +104,14 @@ const checkSoon = async ($: EngineInterface, warned: Set<string>): Promise<void>
 export const registerNextEvent = (on: On, options: PluginOptions): void => {
   const server = typeof options.controlledChaosServer === 'string' ? options.controlledChaosServer : DEFAULT_SERVER
   const warned = new Set<string>()
+  const withSound = options.landingChimeSound !== false
 
   on('session.start', { isInteractive: true }, async ($, e, next) => {
     const result = await next(e)
     void refresh($, server)
     $.clock.every(REFRESH_MS, () => void refresh($, server))
     // Minutes tick locally (patch-status.ts redraws the line each minute); this only watches for 15m.
-    $.clock.every(TICK_MS, () => void checkSoon($, warned))
+    $.clock.every(TICK_MS, () => void checkSoon($, warned, withSound))
     return result
   })
 }

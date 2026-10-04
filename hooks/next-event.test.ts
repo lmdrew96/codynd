@@ -1,6 +1,6 @@
 import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { landingToast, parseCalendarTime, parseNextEvent } from './next-event.ts'
+import { LANDING_CHIME, landingToast, parseCalendarTime, parseNextEvent } from './next-event.ts'
 import { eventSegment, statusLine } from './patch-status.ts'
 
 // Shaped like real cc_list_calendar output: an all-day event, a timed one, a tentative one, planned work.
@@ -79,18 +79,18 @@ describe('helpers', () => {
   test('it rides alongside the patch or focus, never replacing them', () => {
     const latin = { id: 'a2', title: 'Latin', startsAt: LATIN, category: 'school' }
     const now = LATIN - 40 * MIN
-    expect(statusLine({ patches: [], focus: 'Side quest', now, event: latin })).toBe('🎯 Side quest │ 📚 Latin in 40m')
+    expect(statusLine({ patches: [], focus: 'Side quest', now, event: latin })).toBe('📚 Latin in 40m │ 🎯 Side quest')
     expect(statusLine({ patches: [], focus: null, now, event: latin })).toBe('📚 Latin in 40m')
     expect(statusLine({ patches: [], focus: 'Side quest', now, event: null })).toBe('🎯 Side quest')
     expect(landingToast(latin, 15)).toBe('🛬 Latin in 15m. Start landing the plane.')
   })
 })
 
-type Seen = { statuses: (string | undefined)[]; toasts: string[]; calls: Record<string, unknown>[] }
+type Seen = { statuses: (string | undefined)[]; toasts: string[]; sounds: string[]; calls: Record<string, unknown>[] }
 
 // ControlledChaos answers with the calendar above, or errors; ChaosPatch has nothing in progress.
 const world = (on: On, calendar: { text: string; isError: boolean }): Seen => {
-  const seen: Seen = { statuses: [], toasts: [], calls: [] }
+  const seen: Seen = { statuses: [], toasts: [], sounds: [], calls: [] }
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('session.cwd', () => ({ value: '/x/codynd' }))
   on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
@@ -108,6 +108,10 @@ const world = (on: On, calendar: { text: string; isError: boolean }): Seen => {
   })
   on('ui.toast', (_$, e) => {
     seen.toasts.push(e.text)
+    return { value: undefined }
+  })
+  on('audio.play', (_$, e) => {
+    if (e.clip.asset !== undefined) seen.sounds.push(e.clip.asset)
     return { value: undefined }
   })
   return seen
@@ -128,7 +132,7 @@ describe('next-event countdown', () => {
     const seen = world(on, { text: CALENDAR, isError: false })
     await start($)
     expect(seen.calls[0]).toMatchObject({ include_planned: false })
-    expect(seen.statuses.at(-1)).toBe('⏱ <1m in │ 📚 LATN 101 - Elementary Latin I in 40m')
+    expect(seen.statuses.at(-1)).toBe('📚 LATN 101 - Elementary Latin I in 40m │ ⏱ <1m in')
     await clock.advance(25 * MIN)
     await settle()
     // 25 minutes without a prompt is a break, so the stretch has stepped aside.
@@ -136,6 +140,21 @@ describe('next-event countdown', () => {
     await clock.advance(5 * MIN)
     await settle()
     expect(seen.toasts.filter(t => t.startsWith('🛬'))).toEqual(['🛬 LATN 101 - Elementary Latin I in 15m. Start landing the plane.'])
+    // The cabin chime rings with it, once.
+    expect(seen.sounds).toEqual([LANDING_CHIME])
+    await clock.advance(5 * MIN)
+    await settle()
+    expect(seen.sounds).toEqual([LANDING_CHIME])
+  })
+
+  test('landing chime turned off: the toast alone', { options: { landingChimeSound: false } }, async ($, on) => {
+    const clock = mock.clock(on, { now: LATIN - 16 * MIN })
+    const seen = world(on, { text: CALENDAR, isError: false })
+    await start($)
+    await clock.advance(2 * MIN)
+    await settle()
+    expect(seen.toasts.filter(t => t.startsWith('🛬'))).toHaveLength(1)
+    expect(seen.sounds).toEqual([])
   })
 
   test('ControlledChaos unreachable: no segment, nothing on screen', async ($, on) => {

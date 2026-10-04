@@ -1,6 +1,6 @@
 {
   "name": "codynd",
-  "version": "0.27.1",
+  "version": "0.28.0",
   "description": "ND-friendly mods for Claude Code: patch status line and friends.",
   "author": {
     "name": "Nae (ADHDesigns)",
@@ -25,6 +25,12 @@
       "type": "boolean",
       "title": "Attention chime sound",
       "description": "Play a short chime when Claude needs you: a permission prompt or a question.",
+      "default": true
+    },
+    "landingChimeSound": {
+      "type": "boolean",
+      "title": "Landing chime sound",
+      "description": "Play a cabin chime with the 15-minute heads-up before your next ControlledChaos event.",
       "default": true
     },
     "soundtrackPlaylist": {

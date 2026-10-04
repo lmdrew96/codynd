@@ -100,11 +100,12 @@ export type LineParts = {
 }
 
 // The whole line: an in-progress patch wins, then the focus, then the work stretch; the next event
-// rides alongside whichever shows.
+// rides alongside whichever shows. The event leads: the status line is one line ("\n" is flattened),
+// and a narrow terminal cuts the end, so a long patch title gets trimmed rather than the event.
 export const statusLine = ({ patches, focus: label, now, event = null, stretch = null }: LineParts): string | undefined => {
   const work =
     formatStatus(patches, now) ?? (label !== null ? `🎯 ${label}` : now === undefined ? undefined : stretchSegment(stretch, now))
-  const segments = [work, now === undefined ? undefined : eventSegment(event, now)].filter(s => s !== undefined)
+  const segments = [now === undefined ? undefined : eventSegment(event, now), work].filter(s => s !== undefined)
   return segments.length === 0 ? undefined : segments.join(' │ ')
 }
 
