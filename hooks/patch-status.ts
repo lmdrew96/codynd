@@ -1,15 +1,16 @@
+import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
+import type { Patch } from '../types'
 
 // #1 Patch status line: shows the in-progress ChaosPatch patch for this repo.
 // #7 Patch timer: with how long it has been in progress.
 // Built against Claude Code 2.1.289.
 
-export type Patch = {
-  title: string
-  project_slug: string
-  project_name: string
-  started_at: string | null
-}
+export type { Patch }
+
+// In $.state, not a module variable: /patches writes it after a press, since a plugin's
+// own $.tool.call skips its own tool.call hooks (so the refresh hook below never sees it).
+const activePatches = atom({ plugin: 'codynd', key: 'activePatches' } as const, [])
 
 export const DEFAULT_SERVER = 'claude.ai ChaosPatch'
 const REFRESH_MS = 5 * 60_000
@@ -57,14 +58,17 @@ export const formatStatus = (patches: Patch[], now?: number): string | undefined
   return `🩹 ${truncate(newest.title)}${elapsed}${more}`
 }
 
-// Unreachable server or bad response: clear the line, note it in the debug log only.
-type Box = { patches: Patch[] }
-
-const draw = async ($: EngineInterface, box: Box): Promise<void> => {
-  $.ui.status(formatStatus(box.patches, await $.clock.now()))
+// Runs from timers: it catches its own errors, so a reload mid-draw leaves no unhandled rejection.
+const draw = async ($: EngineInterface): Promise<void> => {
+  try {
+    $.ui.status(formatStatus(await read($, activePatches), await $.clock.now()))
+  } catch (err) {
+    $.ui.log(`patch-status: draw failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
+  }
 }
 
-const refresh = async ($: EngineInterface, server: string, box: Box): Promise<void> => {
+// Unreachable server or bad response: clear the line, note it in the debug log only.
+const refresh = async ($: EngineInterface, server: string): Promise<void> => {
   try {
     const [cwd, result] = await Promise.all([
       $.session.cwd(),
@@ -72,30 +76,32 @@ const refresh = async ($: EngineInterface, server: string, box: Box): Promise<vo
     ])
     if (result.isError) throw new Error(result.content.map(b => b.text ?? '').join(' '))
     const text = result.content.map(b => b.text ?? '').join('')
-    box.patches = patchesForCwd(parsePatches(text), cwd)
-    await draw($, box)
+    const patches = patchesForCwd(parsePatches(text), cwd)
+    await update($, activePatches, () => patches)
+    await draw($)
   } catch (err) {
-    box.patches = []
     $.ui.status(undefined)
     $.ui.log(`patch-status: refresh failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
+    await update($, activePatches, () => []).catch((e: unknown) =>
+      $.ui.log(`patch-status: clearing failed: ${e instanceof Error ? e.message : String(e)}`, { to: 'debug' }),
+    )
   }
 }
 
 export const registerPatchStatus = (on: On, options: PluginOptions): void => {
   const server = typeof options.chaospatchServer === 'string' ? options.chaospatchServer : DEFAULT_SERVER
-  const box: Box = { patches: [] }
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
-    void refresh($, server, box)
-    $.clock.every(REFRESH_MS, () => void refresh($, server, box))
-    $.clock.every(TICK_MS, () => void draw($, box))
+    void refresh($, server)
+    $.clock.every(REFRESH_MS, () => void refresh($, server))
+    $.clock.every(TICK_MS, () => void draw($))
     return result
   })
 
   on('tool.call', { tool: PATCH_WRITE_TOOL }, async ($, e, next) => {
     const ran = await next(e)
-    void refresh($, server, box)
+    void refresh($, server)
     return ran
   })
 }

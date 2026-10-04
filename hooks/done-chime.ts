@@ -5,7 +5,7 @@ import { truncate } from './patch-status.ts'
 // Built against Claude Code 2.1.289.
 
 const COMPLETE_TOOL = /__cp_complete_patch$/
-const CHIME = 'sounds/done.wav'
+export const CHIME = 'sounds/done.wav'
 
 // cp_complete_patch answers with the patch as JSON; anything else gets the generic toast.
 export const patchTitle = (text: string | undefined): string | undefined => {

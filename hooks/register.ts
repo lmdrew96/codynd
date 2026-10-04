@@ -2,6 +2,7 @@ import type { Register } from 'claude-code'
 import { registerDoneChime } from './done-chime.ts'
 import { registerPark } from './park.ts'
 import { registerPatchStatus } from './patch-status.ts'
+import { registerPatchesPane } from './patches-pane.tsx'
 import { registerReentryCard } from './reentry-card.tsx'
 import { registerSessionClock } from './session-clock.ts'
 
@@ -11,4 +12,5 @@ export const register: Register = (on, options) => {
   registerSessionClock(on, options)
   registerReentryCard(on, options)
   registerPark(on, options)
+  registerPatchesPane(on, options)
 }
