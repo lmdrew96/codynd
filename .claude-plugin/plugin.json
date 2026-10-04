@@ -1,0 +1,17 @@
+{
+  "name": "codynd",
+  "version": "0.1.0",
+  "description": "ND-friendly mods for Claude Code: patch status line and friends.",
+  "author": {
+    "name": "Nae (ADHDesigns)",
+    "url": "https://github.com/lmdrew96"
+  },
+  "userConfig": {
+    "chaospatchServer": {
+      "type": "string",
+      "title": "ChaosPatch MCP server",
+      "description": "The ChaosPatch server's name as /mcp lists it.",
+      "default": "claude.ai ChaosPatch"
+    }
+  }
+}

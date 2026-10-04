@@ -1,0 +1,15 @@
+{
+  "name": "codynd",
+  "version": "0.1.0",
+  "description": "ND-friendly mods for Claude Code",
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "test": "claude plugin test .",
+    "validate": "claude plugin validate ."
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  },
+  "private": true
+}
