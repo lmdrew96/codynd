@@ -35,6 +35,8 @@ declare module 'claude-code' {
       parkOffer: string | null
       // So the next win sounds and reads different; null until the session's first.
       lastCelebration: Celebration | null
+      // Whether the session's latest test command failed; null until one runs (for the stopping point).
+      lastTestFailed: boolean | null
     }
   }
 }

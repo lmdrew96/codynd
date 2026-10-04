@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import type { Board, BoardRow } from '../types'
-import { CHIMES, DONE_TOAST_MS, doneMessage, nextCelebration } from './done-chime.ts'
+import { CHIMES, DONE_TOAST_MS, STOP_TOAST, doneMessage, isCleanStop, nextCelebration } from './done-chime.ts'
 import { DEFAULT_SERVER, parsePatches, patchesForCwd, statusLine, type Patch } from './patch-status.ts'
 
 // #11 /patches: this repo's ChaosPatch board in a pane, driven by buttons, no model turn.
@@ -14,6 +14,7 @@ const board = atom({ plugin: 'codynd', key: 'board' } as const, null)
 const activePatches = atom({ plugin: 'codynd', key: 'activePatches' } as const, [])
 const focus = atom({ plugin: 'codynd', key: 'focus' } as const, null)
 const lastCelebration = atom({ plugin: 'codynd', key: 'lastCelebration' } as const, null)
+const lastTestFailed = atom({ plugin: 'codynd', key: 'lastTestFailed' } as const, null)
 
 // "claude.ai ChaosPatch" is listed to the model as mcp__claude_ai_ChaosPatch__<tool>.
 export const mcpToolName = (server: string, tool: string): string =>
@@ -55,13 +56,24 @@ const loadBoard = async ($: EngineInterface, server: string): Promise<void> => {
 // The done chime, played here: a plugin's own $.tool.call skips its own tool.call hooks,
 // so done-chime.ts never sees a Done pressed in this pane.
 const celebrate = async ($: EngineInterface, title: string, withSound: boolean): Promise<void> => {
-  const pick = nextCelebration(await read($, lastCelebration), [Math.random(), Math.random()])
-  // Toast before the state write: written after it, the toast skipped toast-queue.ts's hook.
-  $.ui.toast(doneMessage(title, pick.opener), { timeoutMs: DONE_TOAST_MS })
-  await update($, lastCelebration, () => pick)
-  if (!withSound) return
+  let chime: string = CHIMES[0]
   try {
-    await $.audio.play({ asset: CHIMES[pick.sound] ?? CHIMES[0] })
+    const pick = nextCelebration(await read($, lastCelebration), [Math.random(), Math.random()])
+    chime = CHIMES[pick.sound] ?? CHIMES[0]
+    const git = await $.process.run(['git', 'status', '--porcelain']).catch(() => undefined)
+    const isClean = git !== undefined && git.exitCode === 0 && isCleanStop(git.stdout, await read($, lastTestFailed))
+    $.ui.toast(doneMessage(title, pick.opener), { timeoutMs: DONE_TOAST_MS })
+    if (isClean) $.ui.toast(STOP_TOAST)
+    await update($, lastCelebration, () => pick)
+  } catch (err) {
+    $.ui.log(`patches: celebrating failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
+  }
+  if (withSound) void playChime($, chime)
+}
+
+const playChime = async ($: EngineInterface, chime: string): Promise<void> => {
+  try {
+    await $.audio.play({ asset: chime })
   } catch (err) {
     $.ui.log(`patches: sound failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
   }
@@ -85,7 +97,8 @@ const changePatch = async (
     consent: `Nae pressed "${label}" on "${row.title}" in /patches`,
   })
   if (ran.deny !== undefined || ran.isError === true) $.ui.toast(`Couldn't ${label.toLowerCase()} that patch.`)
-  else if (tool === 'cp_complete_patch') void celebrate($, row.title, withSound)
+  // Awaited, sound aside: toasts raised after the press settles skip this plugin's own toast queue.
+  else if (tool === 'cp_complete_patch') await celebrate($, row.title, withSound)
   await loadBoard($, server)
 }
 
