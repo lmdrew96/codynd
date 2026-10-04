@@ -1,5 +1,6 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, On } from 'claude-code'
+import type { EngineInterface, On, PluginOptions } from 'claude-code'
+import { KINDLING_SERVER, kindleArgs } from './park.ts'
 import { statusLine, truncate } from './patch-status.ts'
 
 // #12 Focus slot: Cody names the current non-patch work; the status line shows "🎯 <focus>" when no patch is active.
@@ -14,6 +15,7 @@ const CLEAR_TOOL = /^mcp__codynd__clear_focus$/
 // The same state patch-status.ts and patches-pane.tsx read (atoms are declared per file).
 const focus = atom({ plugin: 'codynd', key: 'focus' } as const, null)
 const activePatches = atom({ plugin: 'codynd', key: 'activePatches' } as const, [])
+const parkOffer = atom({ plugin: 'codynd', key: 'parkOffer' } as const, null)
 
 // Short and plain: one line, trimmed, capped at 40 characters.
 export const cleanFocus = (text: string): string | null => {
@@ -21,14 +23,51 @@ export const cleanFocus = (text: string): string | null => {
   return oneLine === '' ? null : truncate(oneLine, MAX_FOCUS)
 }
 
+// Only a replaced focus is worth rescuing (a clear means the work wrapped up), and each label is
+// offered once a session, so switching back and forth never nags.
+export const offerFor = (old: string | null, label: string | null, offered: ReadonlySet<string>): string | null =>
+  old === null || label === null || old === label || offered.has(old) ? null : old
+
 const setFocus = async ($: EngineInterface, label: string | null): Promise<void> => {
   await update($, focus, () => label)
   $.ui.status(statusLine(await read($, activePatches), label, await $.clock.now()))
 }
 
-export const registerFocus = (on: On): void => {
+// A focus change from Cody or /topic: set it, and quietly offer to park the one it replaced.
+const changeFocus = async ($: EngineInterface, label: string | null, offered: Set<string>): Promise<void> => {
+  const old = await read($, focus)
+  await setFocus($, label)
+  const offer = offerFor(old, label, offered)
+  if (offer === null) return
+  offered.add(offer)
+  await update($, parkOffer, () => offer)
+}
+
+const dismissOffer = async ($: EngineInterface): Promise<void> => {
+  await update($, parkOffer, () => null)
+}
+
+// Parks the way /park does. A failed save keeps the offer up, so the thread isn't lost and Park can be pressed again.
+const parkOld = async ($: EngineInterface, server: string, old: string): Promise<void> => {
+  try {
+    const result = await $.mcp.call(server, 'kindle', kindleArgs(old, await $.session.cwd()))
+    if (result.isError) throw new Error(result.content.map(b => b.text ?? '').join(' '))
+    $.ui.toast(`🅿️ Parked: ${truncate(old, 40)}`)
+    await dismissOffer($)
+  } catch (err) {
+    $.ui.log(`focus: parking the old focus failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
+    $.ui.toast("Couldn't park that one; try again or dismiss.")
+  }
+}
+
+export const registerFocus = (on: On, options: PluginOptions): void => {
+  const server = typeof options.kindlingServer === 'string' ? options.kindlingServer : KINDLING_SERVER
+  // Module state: a reload just forgets which labels were offered, which at worst offers one again.
+  const offered = new Set<string>()
+
   on('session.start', { isInteractive: true }, async ($, e, next) => {
     const result = await next(e)
+    offered.clear()
     await $.tool.register({
       name: 'set_focus',
       description:
@@ -60,7 +99,7 @@ export const registerFocus = (on: On): void => {
     const text = (e as { text?: unknown }).text
     const label = cleanFocus(typeof text === 'string' ? text : '')
     if (label === null) return { result: 'Focus not set: the label was empty.', isError: true }
-    await setFocus($, label)
+    await changeFocus($, label, offered)
     return { result: `Focus set: ${label}` }
   })
 
@@ -71,7 +110,7 @@ export const registerFocus = (on: On): void => {
 
   on('command.run', { command: 'topic' }, async ($, e) => {
     const label = cleanFocus(e.args)
-    await setFocus($, label)
+    await changeFocus($, label, offered)
     return { text: label === null ? 'Focus cleared.' : `Focus: ${label}` }
   })
 
@@ -79,6 +118,34 @@ export const registerFocus = (on: On): void => {
   // /clear, so redraw the line here rather than waiting for one.
   on('session.end', async ($, e, next) => {
     await setFocus($, null)
+    await dismissOffer($)
     return next(e)
+  })
+
+  // One chance, never blocking: the offer goes with Nae's next prompt, like the re-entry card.
+  on('prompt.submit', { origin: { kind: 'composer' } }, async ($, e, next) => {
+    await dismissOffer($)
+    return next(e)
+  })
+
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    const old = await read($, parkOffer)
+    if (old === null || e.props.hasSurvey) return next(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
+    return (
+      <Box borderStyle="round" borderDimColor flexDirection="row" gap={1} paddingX={1}>
+        <Box flexGrow={1} flexShrink={1}>
+          <Text wrap="truncate-end">
+            🅿️ <Text dimColor>Park </Text>"{old}"<Text dimColor> in Kindling?</Text>
+          </Text>
+        </Box>
+        <Button key="park" onPress={() => parkOld($, server, old)}>
+          Park
+        </Button>
+        <Button key="dismiss" role="dismiss" onPress={() => dismissOffer($)}>
+          Dismiss
+        </Button>
+      </Box>
+    )
   })
 }

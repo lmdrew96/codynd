@@ -28,6 +28,8 @@ declare module 'claude-code' {
       activePatches: Patch[]
       // The non-patch work Cody named with set_focus (or Nae with /focus); shown when no patch is active.
       focus: string | null
+      // The focus just replaced, offered once to /park; null when there's no offer showing.
+      parkOffer: string | null
     }
   }
 }

@@ -10,7 +10,7 @@ Neurodivergent-friendly mods for Claude Code that keep your work visible and you
 | --- | --- |
 | **Patch status line** | Shows `🩹 <title> · 24m` under the prompt for the [ChaosPatch](https://chaospatch.adhdesigns.dev) patch in progress in *this* repo (`(+N)` if there are more). The time reads `<1m`, `24m`, `1h 10m`, then whole days (`3d`), redrawn once a minute. Patches from other projects stay quiet. |
 | **Done chime** | When a patch is completed, a 10-second toast (`🎉 Patch done: <title>`) and a short two-note chime. Failed calls don't celebrate. Other CodyND toasts that arrive meanwhile wait their turn, so the win is never covered up. |
-| **Focus slot** | When no patch is in progress, the status line shows `🎯 <focus>`: a short label for the non-patch work at hand. Claude sets it with its `set_focus` / `clear_focus` tools when the topic changes; `/topic <label>` sets it by hand. A patch always wins the line; the focus clears when the session ends. |
+| **Focus slot** | When no patch is in progress, the status line shows `🎯 <focus>`: a short label for the non-patch work at hand. Claude sets it with its `set_focus` / `clear_focus` tools when the topic changes; `/topic <label>` sets it by hand. A patch always wins the line; the focus clears when the session ends. When a focus is replaced by a new one, a small band offers to park the old one in Kindling (Park / Dismiss). It goes away with your next prompt, and each label is offered once a session. |
 | **Session clock** | After 90 minutes of continuous prompting: `🫖 1h 30m in — water? food? stretch?`. One toast per stretch, gone after 15 seconds. 20 minutes without a prompt counts as a break and resets the clock. `/snooze [minutes]` pushes it out (default 30). |
 | **Re-entry card** | A band above the prompt when a session opens: your `/wrap` note ("Left off"), your last commit ("Last time") and the patch in progress, or the top open one ("Up next"). Disappears on Dismiss or your first prompt. `/recap` brings it back, freshly loaded, when you return to a window you left open. |
 | **`/wrap`** | `/wrap <note>` leaves a where-I-left-off note for this repo; the next session's re-entry card shows it (`Left off: <note> · 2h ago`). Bare `/wrap` saves the current patch or focus. Also mentions uncommitted files, as information only. One note per repo, kept on this machine. |
@@ -99,7 +99,7 @@ Claude Code writes the API's type declarations into `.claude-plugin/types/` when
 .claude-plugin/plugin.json   manifest and settings (userConfig)
 hooks/register.ts            wires the mods together
 hooks/patch-status.ts        status line and patch timer
-hooks/focus.ts               focus slot (set_focus / clear_focus tools, /topic)
+hooks/focus.tsx              focus slot (set_focus / clear_focus tools, /topic, park offer)
 hooks/toast-queue.ts         holds toasts behind a done toast
 hooks/done-chime.ts          done chime
 hooks/session-clock.ts       session clock and /snooze
@@ -110,7 +110,7 @@ hooks/quick-patch.ts         /patch
 hooks/wins.ts                /wins and /wins-all
 hooks/wrap.ts                /wrap
 hooks/*.test.ts              tests (claude plugin test)
-types/index.d.ts             $.state contract (card, board, active patches, focus)
+types/index.d.ts             $.state contract (card, board, active patches, focus, park offer)
 sounds/done.wav              the chime (an original synthesized clip)
 ```
 

@@ -4,7 +4,7 @@ import { truncate } from './patch-status.ts'
 // #6 /park: send a side-thought to Kindling without leaving the session.
 // Built against Claude Code 2.1.289.
 
-const DEFAULT_SERVER = 'claude.ai Kindling'
+export const KINDLING_SERVER = 'claude.ai Kindling'
 const TITLE_AFTER = 120
 
 // Kindling lowercases tags; the folder name keeps parked thoughts findable per repo.
@@ -35,7 +35,7 @@ const park = async ($: EngineInterface, server: string, text: string): Promise<{
 }
 
 export const registerPark = (on: On, options: PluginOptions): void => {
-  const server = typeof options.kindlingServer === 'string' ? options.kindlingServer : DEFAULT_SERVER
+  const server = typeof options.kindlingServer === 'string' ? options.kindlingServer : KINDLING_SERVER
 
   on('session.start', { isInteractive: true }, async ($, e, next) => {
     const result = await next(e)
