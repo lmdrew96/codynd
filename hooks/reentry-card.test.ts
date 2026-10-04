@@ -1,7 +1,7 @@
 import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 import type { On, RenderElement } from 'claude-code'
 import { parseLastCommit, pickNext } from './reentry-card.tsx'
-import type { Patch } from './patch-status.ts'
+import { STARTUP_RETRY_MS, type Patch } from './patch-status.ts'
 
 const CWD = '/x/codynd'
 const patch = (title: string, started_at: string | null = null): Patch => ({
@@ -28,8 +28,9 @@ describe('helpers', () => {
 })
 
 // Answers what the plugin touches beneath it: one commit, an in-progress patch or only open ones.
-const world = (on: On, inProgress: Patch[], open: Patch[], gitExit = 0): void => {
-  mock.clock(on)
+// ChaosPatch errors while `chaospatch.isConnected` is false.
+const world = (on: On, inProgress: Patch[], open: Patch[], gitExit = 0, chaospatch = { isConnected: true }): ReturnType<typeof mock.clock> => {
+  const clock = mock.clock(on)
   // Stands in for the engine's own drawing when the band has nothing to show.
   on('ui.render', ($, e) => {
     const { Box } = $.ui.resolve(e)
@@ -47,6 +48,7 @@ const world = (on: On, inProgress: Patch[], open: Patch[], gitExit = 0): void =>
     },
   }))
   on('mcp.call', (_$, e) => {
+    if (!chaospatch.isConnected) return { value: { content: [{ type: 'text', text: 'not connected' }], isError: true } }
     const patches = e.args.status === 'in_progress' ? inProgress : open
     return { value: { content: [{ type: 'text', text: JSON.stringify(patches) }], isError: false } }
   })
@@ -55,6 +57,7 @@ const world = (on: On, inProgress: Patch[], open: Patch[], gitExit = 0): void =>
   on('ui.status', () => ({ value: undefined }))
   on('ui.log', () => ({ value: undefined }))
   on('prompt.submit', (_$, e) => ({ text: e.text }))
+  return clock
 }
 
 const BAND = {
@@ -97,6 +100,34 @@ describe('re-entry band', () => {
     const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
     expect(await ui.find({ type: 'Text', text: /Up next:/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /Last time/ })).toBeUndefined()
+  })
+
+  test('ChaosPatch still connecting at startup: Up next fills in on a retry', async ($, on) => {
+    const chaospatch = { isConnected: false }
+    const clock = world(on, [], [patch('#5 Scope-creep tripwire')], 0, chaospatch)
+    await start($)
+    let ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /v0\.3\.0: add session clock/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /Up next:/ })).toBeUndefined()
+    await ui.unmount()
+    chaospatch.isConnected = true
+    await clock.advance(STARTUP_RETRY_MS)
+    for (let i = 0; i < 200; i++) await Promise.resolve()
+    ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /Up next:/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /v0\.3\.0: add session clock/ })).toBeDefined()
+  })
+
+  test('a retry after the first prompt leaves the card hidden', async ($, on) => {
+    const chaospatch = { isConnected: false }
+    const clock = world(on, [], [patch('#5 Scope-creep tripwire')], 0, chaospatch)
+    await start($)
+    await $.prompt.submit({ text: 'hi', wait: false, origin: { kind: 'composer' } })
+    chaospatch.isConnected = true
+    await clock.advance(STARTUP_RETRY_MS)
+    for (let i = 0; i < 200; i++) await Promise.resolve()
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /Welcome back/ })).toBeUndefined()
   })
 
   test('hides after the first prompt', async ($, on) => {

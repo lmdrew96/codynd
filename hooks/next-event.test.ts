@@ -1,7 +1,7 @@
 import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { LANDING_CHIME, landingToast, parseCalendarTime, parseNextEvent } from './next-event.ts'
-import { eventSegment, statusLine } from './patch-status.ts'
+import { STARTUP_RETRY_MS, eventSegment, statusLine } from './patch-status.ts'
 
 // Shaped like real cc_list_calendar output: an all-day event, a timed one, a tentative one, planned work.
 const CALENDAR = `## Calendar Events (4 found)
@@ -163,5 +163,22 @@ describe('next-event countdown', () => {
     await start($)
     expect(seen.statuses.every(s => s === undefined || s === '⏱ <1m in')).toBe(true)
     expect(seen.toasts).toEqual([])
+  })
+
+  test('ControlledChaos still connecting at startup: retries soon, not in 5 minutes', async ($, on) => {
+    const clock = mock.clock(on, { now: LATIN - 40 * MIN })
+    const calendar = { text: 'not connected', isError: true }
+    const seen = world(on, calendar)
+    await start($)
+    expect(seen.statuses.at(-1)).toBe('⏱ <1m in')
+    calendar.text = CALENDAR
+    calendar.isError = false
+    await clock.advance(STARTUP_RETRY_MS)
+    await settle()
+    expect(seen.calls).toHaveLength(2)
+    // A write from a clock.after timer doesn't fire patch-status's state.set redraw; the minute tick shows it.
+    await clock.advance(MIN)
+    await settle()
+    expect(seen.statuses.at(-1)).toBe('📚 LATN 101 - Elementary Latin I in 39m │ ⏱ 1m in')
   })
 })

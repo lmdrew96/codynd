@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import type { NextEvent } from '../types'
-import { truncate } from './patch-status.ts'
+import { STARTUP_RETRY_MS, truncate } from './patch-status.ts'
 
 // Next-event countdown: the next ControlledChaos event in the status line, so time stays visible
 // during hyperfocus. Visibility only: one heads-up at 15 minutes (a toast and a cabin "bing-bong"),
@@ -11,6 +11,8 @@ import { truncate } from './patch-status.ts'
 const DEFAULT_SERVER = 'claude.ai ControlledChaos'
 const REFRESH_MS = 5 * 60_000
 const TICK_MS = 60_000
+// ControlledChaos is often still connecting at session start (same race as patch-status.ts).
+const STARTUP_RETRIES = 6
 export const WINDOW_MS = 3 * 60 * 60_000
 export const SOON_MS = 15 * 60_000
 // An airline cabin chime, to go with "Start landing the plane"; unlike the done chimes and the yoo-hoo.
@@ -58,9 +60,10 @@ export const parseNextEvent = (markdown: string, now: number): NextEvent | null 
 export const landingToast = (event: NextEvent, minutes: number): string =>
   `🛬 ${truncate(event.title, 40)} in ${minutes}m. Start landing the plane.`
 
-// Unreachable or odd output: no segment, a debug log line, nothing on screen. Writing nextEvent
-// redraws the line (patch-status.ts's state.set hook).
-const refresh = async ($: EngineInterface, server: string): Promise<void> => {
+// Unreachable or odd output: no segment, a debug log line, nothing on screen, and another try soon
+// while `retries` remain (only the session-start load has any). Writing nextEvent redraws the line
+// (patch-status.ts's state.set hook).
+const refresh = async ($: EngineInterface, server: string, retries = 0): Promise<void> => {
   try {
     const now = await $.clock.now()
     const result = await $.mcp.call(server, 'cc_list_calendar', {
@@ -74,6 +77,7 @@ const refresh = async ($: EngineInterface, server: string): Promise<void> => {
   } catch (err) {
     $.ui.log(`next-event: refresh failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
     await update($, nextEvent, () => null).catch(() => undefined)
+    if (retries > 0) $.clock.after(STARTUP_RETRY_MS, () => void refresh($, server, retries - 1))
   }
 }
 
@@ -108,7 +112,7 @@ export const registerNextEvent = (on: On, options: PluginOptions): void => {
 
   on('session.start', { isInteractive: true }, async ($, e, next) => {
     const result = await next(e)
-    void refresh($, server)
+    void refresh($, server, STARTUP_RETRIES)
     $.clock.every(REFRESH_MS, () => void refresh($, server))
     // Minutes tick locally (patch-status.ts redraws the line each minute); this only watches for 15m.
     $.clock.every(TICK_MS, () => void checkSoon($, warned, withSound))
