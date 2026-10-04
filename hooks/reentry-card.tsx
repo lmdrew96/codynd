@@ -1,7 +1,8 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import type { ReentryCard } from '../types'
-import { DEFAULT_SERVER, parsePatches, patchesForCwd, truncate, type Patch } from './patch-status.ts'
+import { DEFAULT_SERVER, formatElapsed, parsePatches, patchesForCwd, truncate, type Patch } from './patch-status.ts'
+import { wrapKey, type LeftOff } from './wrap.ts'
 
 // #4 Context re-entry card: "last time / next" band above the prompt when a session opens.
 // Built against Claude Code 2.1.289.
@@ -15,6 +16,12 @@ const UNIT = '\u001f'
 export const parseLastCommit = (stdout: string): ReentryCard['lastCommit'] => {
   const [subject, when] = stdout.trim().split(UNIT)
   return subject && when ? { subject, when } : null
+}
+
+// Store values are untyped JSON: accept only a well-formed /wrap note.
+export const parseLeftOff = (value: unknown): LeftOff | null => {
+  const v = value as Partial<LeftOff> | undefined
+  return typeof v?.note === 'string' && typeof v.savedAt === 'number' ? { note: v.note, savedAt: v.savedAt } : null
 }
 
 export const pickNext = (inProgress: Patch[], open: Patch[]): ReentryCard['next'] => {
@@ -34,6 +41,7 @@ const listPatches = async ($: EngineInterface, server: string, args: Record<stri
 const loadCard = async ($: EngineInterface, server: string): Promise<void> => {
   const cwd = await $.session.cwd()
   let lastCommit: ReentryCard['lastCommit'] = null
+  let leftOff: ReentryCard['leftOff'] = null
   let next: ReentryCard['next'] = null
   try {
     const git = await $.process.run(['git', 'log', '-1', `--format=%s${UNIT}%cr`])
@@ -49,7 +57,12 @@ const loadCard = async ($: EngineInterface, server: string): Promise<void> => {
   } catch (err) {
     $.ui.log(`reentry-card: ChaosPatch failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
   }
-  if (lastCommit !== null || next !== null) await update($, card, () => ({ lastCommit, next }))
+  try {
+    leftOff = parseLeftOff(await $.store.get(wrapKey(cwd)))
+  } catch (err) {
+    $.ui.log(`reentry-card: reading /wrap note failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
+  }
+  if (leftOff !== null || lastCommit !== null || next !== null) await update($, card, () => ({ leftOff, lastCommit, next }))
 }
 
 const hide = async ($: EngineInterface): Promise<void> => {
@@ -75,9 +88,16 @@ export const registerReentryCard = (on: On, options: PluginOptions): void => {
     const shown = await read($, card)
     if (shown === null || e.props.hasSurvey || (await read($, isHidden))) return next(e)
     const { Box, Button, Text } = $.ui.resolve(e)
+    const now = await $.clock.now()
     return (
       <Box borderStyle="round" borderDimColor flexDirection="column" paddingX={1}>
         <Text bold>↩ Welcome back</Text>
+        {shown.leftOff !== null && (
+          <Text wrap="truncate-end">
+            <Text dimColor>Left off: </Text>
+            {truncate(shown.leftOff.note)} <Text dimColor>· {formatElapsed(now - shown.leftOff.savedAt)} ago</Text>
+          </Text>
+        )}
         {shown.lastCommit !== null && (
           <Text wrap="truncate-end">
             <Text dimColor>Last time: </Text>

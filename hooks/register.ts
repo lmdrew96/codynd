@@ -9,6 +9,7 @@ import { registerReentryCard } from './reentry-card.tsx'
 import { registerSessionClock } from './session-clock.ts'
 import { registerToastQueue } from './toast-queue.ts'
 import { registerWins } from './wins.ts'
+import { registerWrap } from './wrap.ts'
 
 export const register: Register = (on, options) => {
   registerPatchStatus(on, options)
@@ -21,4 +22,5 @@ export const register: Register = (on, options) => {
   registerQuickPatch(on, options)
   registerToastQueue(on)
   registerFocus(on)
+  registerWrap(on)
 }

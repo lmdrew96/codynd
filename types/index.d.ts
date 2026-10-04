@@ -1,4 +1,6 @@
 export type ReentryCard = {
+  // From /wrap last session: the note and when it was saved (ms).
+  leftOff: { note: string; savedAt: number } | null
   lastCommit: { subject: string; when: string } | null
   next: { title: string; isInProgress: boolean } | null
 }
