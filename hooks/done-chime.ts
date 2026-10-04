@@ -21,8 +21,11 @@ export const patchTitle = (text: string | undefined): string | undefined => {
   }
 }
 
+// toast-queue.ts recognizes done toasts by this prefix.
+export const DONE_PREFIX = '🎉 Patch done'
+
 export const doneMessage = (title: string | undefined): string =>
-  title === undefined ? '🎉 Patch done!' : `🎉 Patch done: ${truncate(title)}`
+  title === undefined ? `${DONE_PREFIX}!` : `${DONE_PREFIX}: ${truncate(title)}`
 
 const celebrate = async ($: EngineInterface, title: string | undefined, withSound: boolean): Promise<void> => {
   $.ui.toast(doneMessage(title), { timeoutMs: DONE_TOAST_MS })
