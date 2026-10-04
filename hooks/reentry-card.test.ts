@@ -51,6 +51,7 @@ const world = (on: On, inProgress: Patch[], open: Patch[], gitExit = 0): void =>
     return { value: { content: [{ type: 'text', text: JSON.stringify(patches) }], isError: false } }
   })
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
+  on('tool.register', (_$, e) => ({ value: { tool: `mcp__codynd__${e.name}` } }))
   on('ui.status', () => ({ value: undefined }))
   on('ui.log', () => ({ value: undefined }))
   on('prompt.submit', (_$, e) => ({ text: e.text }))

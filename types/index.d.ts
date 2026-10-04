@@ -24,6 +24,8 @@ declare module 'claude-code' {
       board: Board | null
       // This repo's in-progress patches: the status line draws from it, /patches writes it too.
       activePatches: Patch[]
+      // The non-patch work Cody named with set_focus (or Nae with /focus); shown when no patch is active.
+      focus: string | null
     }
   }
 }

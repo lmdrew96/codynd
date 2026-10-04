@@ -70,6 +70,7 @@ const world = (on: On, answer: () => { text: string; isError: boolean }): (strin
   })
   on('ui.log', () => ({ value: undefined }))
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
+  on('tool.register', (_$, e) => ({ value: { tool: `mcp__codynd__${e.name}` } }))
   return statuses
 }
 

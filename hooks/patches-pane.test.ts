@@ -67,6 +67,7 @@ const world = (on: On): Seen => {
     return h(Box, {}) as RenderElement
   })
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
+  on('tool.register', (_$, e) => ({ value: { tool: `mcp__codynd__${e.name}` } }))
   on('ui.log', () => ({ value: undefined }))
   on('ui.toast', (_$, e) => {
     seen.toasts.push(e.text)

@@ -84,6 +84,7 @@ const world = (on: On, chaosPatchDown = false): Record<string, unknown>[] => {
     return { value: { content: [{ type: 'text', text }], isError: false } }
   })
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
+  on('tool.register', (_$, e) => ({ value: { tool: `mcp__codynd__${e.name}` } }))
   for (const ev of ['ui.status', 'ui.log', 'ui.toast'] as const) on(ev, () => ({ value: undefined }))
   return calls
 }

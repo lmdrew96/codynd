@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import type { Board, BoardRow } from '../types'
 import { CHIME, DONE_TOAST_MS, doneMessage } from './done-chime.ts'
-import { DEFAULT_SERVER, formatStatus, parsePatches, patchesForCwd, type Patch } from './patch-status.ts'
+import { DEFAULT_SERVER, parsePatches, patchesForCwd, statusLine, type Patch } from './patch-status.ts'
 
 // #11 /patches: this repo's ChaosPatch board in a pane, driven by buttons, no model turn.
 // Built against Claude Code 2.1.289.
@@ -12,6 +12,7 @@ const MAX_OPEN = 9
 const board = atom({ plugin: 'codynd', key: 'board' } as const, null)
 // The same state as patch-status.ts's activePatches (the validator wants atoms declared per file).
 const activePatches = atom({ plugin: 'codynd', key: 'activePatches' } as const, [])
+const focus = atom({ plugin: 'codynd', key: 'focus' } as const, null)
 
 // "claude.ai ChaosPatch" is listed to the model as mcp__claude_ai_ChaosPatch__<tool>.
 export const mcpToolName = (server: string, tool: string): string =>
@@ -41,7 +42,7 @@ const loadBoard = async ($: EngineInterface, server: string): Promise<void> => {
     await update($, board, () => ({ inProgress: toRows(inProgress), open: toRows(open).slice(0, MAX_OPEN) }))
     // Keep the status line in step: it shares this list (see activePatches in patch-status.ts).
     await update($, activePatches, () => inProgress)
-    $.ui.status(formatStatus(inProgress, await $.clock.now()))
+    $.ui.status(statusLine(inProgress, await read($, focus), await $.clock.now()))
   } catch (err) {
     $.ui.log(`patches: load failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
     await update($, board, () => ({ inProgress: [], open: [], error: "Couldn't reach ChaosPatch." })).catch((e: unknown) =>

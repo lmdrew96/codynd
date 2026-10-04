@@ -29,6 +29,7 @@ const world = (on: On, clock: { now: () => number }): Shown[] => {
   // The kit leaves a hook's result text unset, so the done toast is the generic "🎉 Patch done!".
   on('tool.call', () => ({ result: '{}' }))
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
+  on('tool.register', (_$, e) => ({ value: { tool: `mcp__codynd__${e.name}` } }))
   for (const ev of ['ui.status', 'ui.log', 'audio.play'] as const) on(ev, () => ({ value: undefined }))
   on('ui.toast', (_$, e) => {
     shown.push({ at: clock.now(), text: e.text })

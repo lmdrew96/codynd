@@ -11,6 +11,8 @@ export type { Patch }
 // In $.state, not a module variable: /patches writes it after a press, since a plugin's
 // own $.tool.call skips its own tool.call hooks (so the refresh hook below never sees it).
 const activePatches = atom({ plugin: 'codynd', key: 'activePatches' } as const, [])
+// #12: shown when no patch is in progress (set by focus.ts).
+const focus = atom({ plugin: 'codynd', key: 'focus' } as const, null)
 
 export const DEFAULT_SERVER = 'claude.ai ChaosPatch'
 const REFRESH_MS = 5 * 60_000
@@ -58,10 +60,14 @@ export const formatStatus = (patches: Patch[], now?: number): string | undefined
   return `🩹 ${truncate(newest.title)}${elapsed}${more}`
 }
 
+// The whole line: an in-progress patch wins, then the focus, then nothing.
+export const statusLine = (patches: Patch[], focusLabel: string | null, now?: number): string | undefined =>
+  formatStatus(patches, now) ?? (focusLabel === null ? undefined : `🎯 ${focusLabel}`)
+
 // Runs from timers: it catches its own errors, so a reload mid-draw leaves no unhandled rejection.
 const draw = async ($: EngineInterface): Promise<void> => {
   try {
-    $.ui.status(formatStatus(await read($, activePatches), await $.clock.now()))
+    $.ui.status(statusLine(await read($, activePatches), await read($, focus), await $.clock.now()))
   } catch (err) {
     $.ui.log(`patch-status: draw failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
   }
@@ -80,11 +86,12 @@ const refresh = async ($: EngineInterface, server: string): Promise<void> => {
     await update($, activePatches, () => patches)
     await draw($)
   } catch (err) {
-    $.ui.status(undefined)
     $.ui.log(`patch-status: refresh failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
     await update($, activePatches, () => []).catch((e: unknown) =>
       $.ui.log(`patch-status: clearing failed: ${e instanceof Error ? e.message : String(e)}`, { to: 'debug' }),
     )
+    // No patches known: the focus (if any) still shows.
+    await draw($)
   }
 }
 

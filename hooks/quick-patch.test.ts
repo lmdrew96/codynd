@@ -59,6 +59,7 @@ const world = (on: On, fork: Fork, cwd = '/x/codynd'): Seen => {
     return { value: { isAnswered: true, text: GOOD, usage: USAGE } as never }
   })
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
+  on('tool.register', (_$, e) => ({ value: { tool: `mcp__codynd__${e.name}` } }))
   on('ui.status', () => ({ value: undefined }))
   on('ui.toast', (_$, e) => {
     seen.toasts.push(e.text)
