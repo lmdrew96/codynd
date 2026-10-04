@@ -1,6 +1,6 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
-import type { Patch } from '../types'
+import type { NextEvent, Patch } from '../types'
 
 // #1 Patch status line: shows the in-progress ChaosPatch patch for this repo.
 // #7 Patch timer: with how long it has been in progress.
@@ -13,6 +13,8 @@ export type { Patch }
 const activePatches = atom({ plugin: 'codynd', key: 'activePatches' } as const, [])
 // #12: shown when no patch is in progress (set by focus.ts).
 const focus = atom({ plugin: 'codynd', key: 'focus' } as const, null)
+// next-event.ts caches it; the line ticks its minutes each redraw.
+const nextEvent = atom({ plugin: 'codynd', key: 'nextEvent' } as const, null)
 
 export const DEFAULT_SERVER = 'claude.ai ChaosPatch'
 const REFRESH_MS = 5 * 60_000
@@ -60,14 +62,31 @@ export const formatStatus = (patches: Patch[], now?: number): string | undefined
   return `🩹 ${truncate(newest.title)}${elapsed}${more}`
 }
 
-// The whole line: an in-progress patch wins, then the focus, then nothing.
-export const statusLine = (patches: Patch[], focusLabel: string | null, now?: number): string | undefined =>
-  formatStatus(patches, now) ?? (focusLabel === null ? undefined : `🎯 ${focusLabel}`)
+const EVENT_EMOJI: Record<string, string> = { school: '📚', work: '💼', personal: '🏠', errands: '🛒', health: '🩺' }
+const EVENT_WINDOW_MS = 3 * 60 * 60_000
+// The line is plain text, so "amber" is the emoji: 🟠 from 15 minutes out.
+const EVENT_SOON_MS = 15 * 60_000
+
+// "📚 Latin in 40m"; nothing once it has started or while it's more than 3h off.
+export const eventSegment = (event: NextEvent | null, now: number): string | undefined => {
+  if (event === null) return undefined
+  const left = event.startsAt - now
+  if (left <= 0 || left > EVENT_WINDOW_MS) return undefined
+  const emoji = left <= EVENT_SOON_MS ? '🟠' : (EVENT_EMOJI[event.category ?? ''] ?? '📅')
+  return `${emoji} ${truncate(event.title, 30)} in ${formatElapsed(left + 59_999)}`
+}
+
+// The whole line: an in-progress patch wins, then the focus; the next event rides alongside either.
+export const statusLine = (patches: Patch[], focusLabel: string | null, now?: number, event: NextEvent | null = null): string | undefined => {
+  const work = formatStatus(patches, now) ?? (focusLabel === null ? undefined : `🎯 ${focusLabel}`)
+  const segments = [work, now === undefined ? undefined : eventSegment(event, now)].filter(s => s !== undefined)
+  return segments.length === 0 ? undefined : segments.join(' │ ')
+}
 
 // Runs from timers: it catches its own errors, so a reload mid-draw leaves no unhandled rejection.
 const draw = async ($: EngineInterface): Promise<void> => {
   try {
-    $.ui.status(statusLine(await read($, activePatches), await read($, focus), await $.clock.now()))
+    $.ui.status(statusLine(await read($, activePatches), await read($, focus), await $.clock.now(), await read($, nextEvent)))
   } catch (err) {
     $.ui.log(`patch-status: draw failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
   }

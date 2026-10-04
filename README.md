@@ -11,6 +11,7 @@ Neurodivergent-friendly mods for Claude Code that keep your work visible and you
 | **Patch status line** | Shows `🩹 <title> · 24m` under the prompt for the [ChaosPatch](https://chaospatch.adhdesigns.dev) patch in progress in *this* repo (`(+N)` if there are more). The time reads `<1m`, `24m`, `1h 10m`, then whole days (`3d`), redrawn once a minute. Patches from other projects stay quiet. |
 | **Done chime** | When a patch is completed, a 10-second toast (`🎉 Patch done: <title>`) and a short chime. Each session's first win gets the classic two-note chime; after that the sound and the toast's opener rotate (`✨ Shipped`, `🌱 One less thing`, …), never the same twice running, so the reward stays fresh. If the tree is fully committed and the session's latest test run (if any) passed, a second toast follows: `🟢 Clean stopping point. Safe to walk away.` Otherwise it stays silent; it never runs tests itself. Failed calls don't celebrate. Other CodyND toasts that arrive meanwhile wait their turn, so the win is never covered up. |
 | **Focus slot** | When no patch is in progress, the status line shows `🎯 <focus>`: a short label for the non-patch work at hand. Claude sets it with its `set_focus` / `clear_focus` tools when the topic changes; `/topic <label>` sets it by hand. A patch always wins the line; the focus clears when the session ends. When a focus is replaced by a new one, a small band offers to park the old one in Kindling (Park / Dismiss). It goes away with your next prompt, and each label is offered once a session. |
+| **Next-event countdown** | Your next [ControlledChaos](https://controlledchaos.adhdesigns.dev) event rides alongside the patch or focus: `🩹 <patch> │ 📚 Latin in 40m`. Only timed events you've committed to count (not all-day or tentative ones, not planned work blocks), and only within the next 3 hours. At 15 minutes the emoji turns 🟠 and one toast says `🛬 <event> in 15m. Start landing the plane.` Fetched every 5 minutes, ticked each minute; if ControlledChaos can't be reached, the segment just isn't there. |
 | **Session clock** | After 90 minutes of continuous prompting: `🫖 1h 30m in — water? food? stretch?`. One toast per stretch, gone after 15 seconds. 20 minutes without a prompt counts as a break and resets the clock. `/snooze [minutes]` pushes it out (default 30). |
 | **Re-entry card** | A band above the prompt when a session opens: your `/wrap` note ("Left off"), your last commit ("Last time") and the patch in progress, or the top open one ("Up next"). Disappears on Dismiss or your first prompt. `/recap` brings it back, freshly loaded, when you return to a window you left open. |
 | **`/wrap`** | `/wrap <note>` leaves a where-I-left-off note for this repo; the next session's re-entry card shows it (`Left off: <note> · 2h ago`). Bare `/wrap` saves the current patch or focus. Also mentions uncommitted files, as information only. One note per repo, kept on this machine. |
@@ -55,6 +56,7 @@ Pick one. Loading it two ways at once loads it twice.
 - **Claude Code with mod support.** The mod API is early access and can change between releases. CodyND was built against **Claude Code 2.1.289**.
 - **A ChaosPatch MCP server** for the status line, the chime, `/patches`, `/fried`, `/patch`, `/wins`, and the card's "Up next" line. Without one those stay quietly empty; the session clock and the card's "Last time" line still work. A project matches a repo when its slug or name equals the repo's folder name, ignoring case and punctuation (`chicken-scratch` = `Chicken Scratch`).
 - **A Kindling MCP server** for `/park`.
+- **A ControlledChaos MCP server** for the next-event countdown.
 - **`/patch` makes one model call** per use: a fork of your session, on the session's model, mostly served from the prompt cache. Every other mod runs without model calls.
 - **macOS for the sound.** The chime plays through `afplay`; elsewhere you get the toast only.
 
@@ -68,6 +70,7 @@ Change these in `/config` (they're stored under `pluginConfigs.codynd` in your s
 | `doneChimeSound` | `true` | Play the chime when a patch is completed. |
 | `bodyCheckMinutes` | `90` | Minutes of continuous work before the body-check nudge. |
 | `kindlingServer` | `claude.ai Kindling` | Your Kindling MCP server's name, for `/park`. |
+| `controlledChaosServer` | `claude.ai ControlledChaos` | Your ControlledChaos MCP server's name, for the next-event countdown. |
 
 ## Commands
 
@@ -100,6 +103,7 @@ Claude Code writes the API's type declarations into `.claude-plugin/types/` when
 ```
 .claude-plugin/plugin.json   manifest and settings (userConfig)
 hooks/register.ts            wires the mods together
+hooks/next-event.ts          next-event countdown
 hooks/patch-status.ts        status line and patch timer
 hooks/focus.tsx              focus slot (set_focus / clear_focus tools, /topic, park offer)
 hooks/toast-queue.ts         holds toasts behind a done toast

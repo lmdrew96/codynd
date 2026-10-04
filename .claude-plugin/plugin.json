@@ -1,6 +1,6 @@
 {
   "name": "codynd",
-  "version": "0.17.0",
+  "version": "0.18.0",
   "description": "ND-friendly mods for Claude Code: patch status line and friends.",
   "author": {
     "name": "Nae (ADHDesigns)",
@@ -32,6 +32,12 @@
       "title": "Kindling MCP server",
       "description": "The Kindling server's name as /mcp lists it (for /park).",
       "default": "claude.ai Kindling"
+    },
+    "controlledChaosServer": {
+      "type": "string",
+      "title": "ControlledChaos MCP server",
+      "description": "The ControlledChaos server's name as /mcp lists it (for the next-event countdown).",
+      "default": "claude.ai ControlledChaos"
     }
   }
 }

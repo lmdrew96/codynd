@@ -1,6 +1,7 @@
 import type { Register } from 'claude-code'
 import { registerDoneChime } from './done-chime.ts'
 import { registerFocus } from './focus.tsx'
+import { registerNextEvent } from './next-event.ts'
 import { registerPark } from './park.ts'
 import { registerPatchStatus } from './patch-status.ts'
 import { registerPatchesPane } from './patches-pane.tsx'
@@ -23,4 +24,5 @@ export const register: Register = (on, options) => {
   registerToastQueue(on)
   registerFocus(on, options)
   registerWrap(on)
+  registerNextEvent(on, options)
 }

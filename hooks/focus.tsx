@@ -15,6 +15,7 @@ const CLEAR_TOOL = /^mcp__codynd__clear_focus$/
 // The same state patch-status.ts and patches-pane.tsx read (atoms are declared per file).
 const focus = atom({ plugin: 'codynd', key: 'focus' } as const, null)
 const activePatches = atom({ plugin: 'codynd', key: 'activePatches' } as const, [])
+const nextEvent = atom({ plugin: 'codynd', key: 'nextEvent' } as const, null)
 const parkOffer = atom({ plugin: 'codynd', key: 'parkOffer' } as const, null)
 
 // Short and plain: one line, trimmed, capped at 40 characters.
@@ -30,7 +31,7 @@ export const offerFor = (old: string | null, label: string | null, offered: Read
 
 const setFocus = async ($: EngineInterface, label: string | null): Promise<void> => {
   await update($, focus, () => label)
-  $.ui.status(statusLine(await read($, activePatches), label, await $.clock.now()))
+  $.ui.status(statusLine(await read($, activePatches), label, await $.clock.now(), await read($, nextEvent)))
 }
 
 // A focus change from Cody or /topic: set it, and quietly offer to park the one it replaced.

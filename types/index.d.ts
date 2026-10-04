@@ -16,6 +16,9 @@ export type Patch = {
 // The last done celebration's picks: indexes into the chime and toast-opener pools.
 export type Celebration = { sound: number; opener: number }
 
+// The next timed ControlledChaos event within 3h, for the status-line countdown (startsAt in ms).
+export type NextEvent = { id: string; title: string; startsAt: number; category: string | null }
+
 export type BoardRow = { id: string; title: string }
 
 // A /fried row: a low-energy patch from any project; isHere when it belongs to this repo.
@@ -44,6 +47,8 @@ declare module 'claude-code' {
       lastCelebration: Celebration | null
       // Whether the session's latest test command failed; null until one runs (for the stopping point).
       lastTestFailed: boolean | null
+      // Cached every 5 minutes; the countdown ticks from it locally.
+      nextEvent: NextEvent | null
     }
   }
 }
