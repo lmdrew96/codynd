@@ -25,6 +25,10 @@ const LINE_KEYS: readonly string[] = ['activePatches', 'focus', 'nextEvent', 'wo
 
 export const DEFAULT_SERVER = 'claude.ai ChaosPatch'
 const REFRESH_MS = 5 * 60_000
+// At session start ChaosPatch is often still connecting, so the first load fails. Without a quick
+// retry the line, and the patch-or-focus reminder that reads it, sat empty until the 5-minute refresh.
+export const STARTUP_RETRY_MS = 20_000
+const STARTUP_RETRIES = 6
 // Elapsed time redraws from the cached patches; no ChaosPatch call.
 const TICK_MS = 60_000
 const MAX_TITLE = 60
@@ -128,8 +132,9 @@ const draw = async ($: EngineInterface, written?: Written): Promise<void> => {
   }
 }
 
-// Unreachable server or bad response: clear the line, note it in the debug log only.
-const refresh = async ($: EngineInterface, server: string): Promise<void> => {
+// Unreachable server or bad response: clear the line, note it in the debug log only, and try
+// again soon while `retries` remain (only the session-start load has any).
+const refresh = async ($: EngineInterface, server: string, retries = 0): Promise<void> => {
   try {
     const [cwd, result] = await Promise.all([
       $.session.cwd(),
@@ -146,6 +151,7 @@ const refresh = async ($: EngineInterface, server: string): Promise<void> => {
       $.ui.log(`patch-status: clearing failed: ${e instanceof Error ? e.message : String(e)}`, { to: 'debug' }),
     )
     await draw($, { key: 'activePatches', value: [] })
+    if (retries > 0) $.clock.after(STARTUP_RETRY_MS, () => void refresh($, server, retries - 1))
   }
 }
 
@@ -154,7 +160,7 @@ export const registerPatchStatus = (on: On, options: PluginOptions): void => {
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
-    void refresh($, server)
+    void refresh($, server, STARTUP_RETRIES)
     $.clock.every(REFRESH_MS, () => void refresh($, server))
     $.clock.every(TICK_MS, () => void draw($))
     return result

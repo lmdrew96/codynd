@@ -1,6 +1,6 @@
 import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { formatElapsed, formatStatus, normalize, patchesForCwd, statusLine, stretchSegment, type Patch } from './patch-status.ts'
+import { STARTUP_RETRY_MS, formatElapsed, formatStatus, normalize, patchesForCwd, statusLine, stretchSegment, type Patch } from './patch-status.ts'
 
 const patch = (title: string, project_slug: string, project_name: string, started_at: string): Patch => ({
   title,
@@ -103,6 +103,23 @@ describe('status line', () => {
     await clock.advance(10)
     await settle()
     expect(statuses.at(-1)).toBe('⏱ <1m in')
+  })
+
+  test('ChaosPatch still connecting at startup: retries soon, not in 5 minutes', async ($, on) => {
+    const clock = mock.clock(on)
+    await clock.set(Date.parse('2026-10-04T02:07:31Z') + 5 * 60_000)
+    let isConnected = false
+    const statuses = world(on, () =>
+      isConnected ? { text: JSON.stringify(PATCHES), isError: false } : { text: 'not connected', isError: true },
+    )
+    await startSession($)
+    await clock.advance(10)
+    await settle()
+    expect(statuses.at(-1)).toBe('⏱ <1m in')
+    isConnected = true
+    await clock.advance(STARTUP_RETRY_MS)
+    await settle()
+    expect(statuses.at(-1)).toBe('🩹 #1 Patch status line · 5m')
   })
 
   test('refreshes after a patch is completed', async ($, on) => {
