@@ -54,6 +54,7 @@ const world = (on: On, answer: () => { text: string; isError: boolean }): (strin
     return { value: undefined }
   })
   on('ui.log', () => ({ value: undefined }))
+  on('command.register', (_$, e) => ({ value: { command: e.name } }))
   return statuses
 }
 

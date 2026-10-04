@@ -1,6 +1,6 @@
 {
   "name": "codynd",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "ND-friendly mods for Claude Code: patch status line and friends.",
   "author": {
     "name": "Nae (ADHDesigns)",
@@ -18,6 +18,12 @@
       "title": "Done chime sound",
       "description": "Play a chime when a ChaosPatch patch is completed.",
       "default": true
+    },
+    "bodyCheckMinutes": {
+      "type": "number",
+      "title": "Body check interval (minutes)",
+      "description": "Minutes of continuous work before a gentle body-check nudge.",
+      "default": 90
     }
   }
 }
