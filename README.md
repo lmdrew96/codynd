@@ -8,10 +8,12 @@ Neurodivergent-friendly mods for Claude Code that keep your work visible and you
 
 | Mod | What it does |
 | --- | --- |
-| **Patch status line** | Shows `🩹 <title>` under the prompt for the [ChaosPatch](https://chaospatch.adhdesigns.dev) patch in progress in *this* repo (`(+N)` if there are more). Patches from other projects stay quiet. Refreshes right after patch changes and every 5 minutes. |
+| **Patch status line** | Shows `🩹 <title> · 24m` under the prompt for the [ChaosPatch](https://chaospatch.adhdesigns.dev) patch in progress in *this* repo (`(+N)` if there are more). The time reads `<1m`, `24m`, `1h 10m`, then whole days (`3d`), redrawn once a minute. Patches from other projects stay quiet. |
 | **Done chime** | When a patch is completed, a toast (`🎉 Patch done: <title>`) and a short two-note chime. Failed calls don't celebrate. |
 | **Session clock** | After 90 minutes of continuous prompting: `🫖 1h 30m in — water? food? stretch?`. One toast per stretch, gone after 15 seconds. 20 minutes without a prompt counts as a break and resets the clock. `/snooze [minutes]` pushes it out (default 30). |
 | **Re-entry card** | A band above the prompt when a session opens: your last commit ("Last time") and the patch in progress, or the top open one ("Up next"). Disappears on Dismiss or your first prompt. |
+| **`/park`** | `/park <thought>` saves a side-thought to [Kindling](https://kindling.adhdesigns.dev), tagged `parked` and `project:<repo>`, and confirms with a toast. Tangents get caught, not policed. If it can't save, the thought is echoed back so it isn't lost. |
+| **`/patches`** | Opens this repo's ChaosPatch board in a pane: in-progress patches with **Done**, open ones by priority with **Start** and **→ Cody**, which hands the patch to Claude as a prompt (number keys press it). Done plays the chime. Esc closes. |
 
 ## Install
 
@@ -46,7 +48,8 @@ Pick one. Loading it two ways at once loads it twice.
 ## Requirements
 
 - **Claude Code with mod support.** The mod API is early access and can change between releases. CodyND was built against **Claude Code 2.1.289**.
-- **A ChaosPatch MCP server** for the status line, the chime, and the card's "Up next" line. Without one those stay quietly empty; the session clock and the card's "Last time" line still work. A project matches a repo when its slug or name equals the repo's folder name, ignoring case and punctuation (`chicken-scratch` = `Chicken Scratch`).
+- **A ChaosPatch MCP server** for the status line, the chime, `/patches`, and the card's "Up next" line. Without one those stay quietly empty; the session clock and the card's "Last time" line still work. A project matches a repo when its slug or name equals the repo's folder name, ignoring case and punctuation (`chicken-scratch` = `Chicken Scratch`).
+- **A Kindling MCP server** for `/park`.
 - **macOS for the sound.** The chime plays through `afplay`; elsewhere you get the toast only.
 
 ## Settings
@@ -58,11 +61,14 @@ Change these in `/config` (they're stored under `pluginConfigs.codynd` in your s
 | `chaospatchServer` | `claude.ai ChaosPatch` | Your ChaosPatch MCP server's name, as `/mcp` lists it. |
 | `doneChimeSound` | `true` | Play the chime when a patch is completed. |
 | `bodyCheckMinutes` | `90` | Minutes of continuous work before the body-check nudge. |
+| `kindlingServer` | `claude.ai Kindling` | Your Kindling MCP server's name, for `/park`. |
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
+| `/patches` | Open this repo's ChaosPatch board. |
+| `/park <thought>` | Park a side-thought in Kindling. |
 | `/snooze [minutes]` | Push the next body-check nudge out (default 30 minutes). |
 
 ## Development
@@ -81,12 +87,14 @@ Claude Code writes the API's type declarations into `.claude-plugin/types/` when
 ```
 .claude-plugin/plugin.json   manifest and settings (userConfig)
 hooks/register.ts            wires the mods together
-hooks/patch-status.ts        status line
+hooks/patch-status.ts        status line and patch timer
 hooks/done-chime.ts          done chime
 hooks/session-clock.ts       session clock and /snooze
 hooks/reentry-card.tsx       re-entry card
+hooks/park.ts                /park
+hooks/patches-pane.tsx       /patches board
 hooks/*.test.ts              tests (claude plugin test)
-types/index.d.ts             $.state contract for the card
+types/index.d.ts             $.state contract (card, board, active patches)
 sounds/done.wav              the chime (an original synthesized clip)
 ```
 
