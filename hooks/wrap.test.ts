@@ -1,6 +1,6 @@
 import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 import type { On, RenderElement } from 'claude-code'
-import { autoNote, uncommittedLine, wrapKey } from './wrap.ts'
+import { accountNote, autoNote, uncommittedLine, wrapKey } from './wrap.ts'
 import { parseLeftOff } from './reentry-card.tsx'
 
 const CWD = '/x/codynd'
@@ -11,6 +11,13 @@ describe('helpers', () => {
     expect(autoNote([PATCH], 'Side quest')).toBe('🩹 #10 /wrap')
     expect(autoNote([], 'Side quest')).toBe('🎯 Side quest')
     expect(autoNote([], null)).toBeNull()
+  })
+
+  test('the account is one plain paragraph, led by the patch/focus label', () => {
+    expect(accountNote('Wired the card.\n\n```ts\nx\n```\nNext: tests.', '🎯 Card')).toBe('🎯 Card: Wired the card. Next: tests.')
+    expect(accountNote('Did things.', null)).toBe('Did things.')
+    expect(accountNote('  ', '🎯 Card')).toBeNull()
+    expect(accountNote('word '.repeat(200), null)?.length).toBe(420)
   })
 
   test('uncommitted files are counted, never warned about', () => {
@@ -27,8 +34,13 @@ describe('helpers', () => {
 })
 
 // The engine beneath the plugin: a store in memory, a dirty or clean tree, no patches.
-const world = (on: On, porcelain = '', store: Record<string, unknown> = {}) => {
+type Fork = { isAnswered: boolean; text?: string; reason?: string }
+const USAGE = { inputTokens: 1, outputTokens: 1, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 }
+const ACCOUNT = 'Built the longer wrap note and showed it on the card. Tests pass. Next: Nae checks it in a real session.'
+
+const world = (on: On, porcelain = '', store: Record<string, unknown> = {}, fork: Fork = { isAnswered: true, text: ACCOUNT }) => {
   const clock = mock.clock(on)
+  on('model.fork', () => ({ value: { ...fork, usage: USAGE } as never }))
   // The store in memory, readable by the test (the kit's $ has no store noun).
   on('store.get', (_$, e) => ({ value: store[e.key] }))
   on('store.set', (_$, e) => {
@@ -72,15 +84,29 @@ describe('/wrap', () => {
     expect(store[wrapKey(CWD)]).toMatchObject({ note: 'halfway through the card line' })
   })
 
-  test('bare /wrap saves the focus on a non-patch day', async ($, on) => {
-    world(on)
+  test('bare /wrap writes up what got done, led by the focus', async ($, on) => {
+    const { store } = world(on)
+    await start($)
+    await run($, 'topic', 'Debugging Tangle identity')
+    expect(await run($, 'wrap', '')).toBe(`Saved for next time: 🎯 Debugging Tangle identity: ${ACCOUNT}`)
+    expect(store[wrapKey(CWD)]).toMatchObject({ note: `🎯 Debugging Tangle identity: ${ACCOUNT}` })
+  })
+
+  test('if the write-up fails, bare /wrap saves the focus alone', async ($, on) => {
+    world(on, '', {}, { isAnswered: false, reason: 'nothing-to-fork' })
     await start($)
     await run($, 'topic', 'Debugging Tangle identity')
     expect(await run($, 'wrap', '')).toBe('Saved for next time: 🎯 Debugging Tangle identity')
   })
 
-  test('with nothing current, bare /wrap asks for a note', async ($, on) => {
+  test('with no patch or focus, the write-up is saved on its own', async ($, on) => {
     world(on)
+    await start($)
+    expect(await run($, 'wrap', '')).toBe(`Saved for next time: ${ACCOUNT}`)
+  })
+
+  test('with nothing current and nothing to write up, bare /wrap asks for a note', async ($, on) => {
+    world(on, '', {}, { isAnswered: false, reason: 'nothing-to-fork' })
     await start($)
     expect(await run($, 'wrap', '')).toBe('Nothing to save yet. Add a note: /wrap <where you left off>')
   })

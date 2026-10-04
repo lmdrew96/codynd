@@ -110,9 +110,9 @@ export const registerReentryCard = (on: On, options: PluginOptions): void => {
       <Box borderStyle="round" borderDimColor flexDirection="column" paddingX={1}>
         <Text bold>↩ Welcome back</Text>
         {shown.leftOff !== null && (
-          <Text wrap="truncate-end">
+          <Text>
             <Text dimColor>Left off: </Text>
-            {truncate(shown.leftOff.note)} <Text dimColor>· {formatElapsed(now - shown.leftOff.savedAt)} ago</Text>
+            {shown.leftOff.note} <Text dimColor>· {formatElapsed(now - shown.leftOff.savedAt)} ago</Text>
           </Text>
         )}
         {shown.lastCommit !== null && (

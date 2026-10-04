@@ -9,6 +9,8 @@ import { truncate } from './patch-status.ts'
 export type LeftOff = { note: string; savedAt: number }
 
 const MAX_NOTE = 200
+// Room for the ~50-word account bare /wrap writes, plus its patch/focus label.
+const MAX_ACCOUNT = 420
 // Read-only here: the same state the status line and focus slot use.
 const activePatches = atom({ plugin: 'codynd', key: 'activePatches' } as const, [])
 const focus = atom({ plugin: 'codynd', key: 'focus' } as const, null)
@@ -23,6 +25,33 @@ export const autoNote = (patches: Patch[], focusLabel: string | null): string | 
   return focusLabel === null ? null : `🎯 ${focusLabel}`
 }
 
+export const accountPrompt = (label: string | null): string =>
+  [
+    'Nae is wrapping up this session and wants a where-I-left-off note for next time.',
+    'In about 50 words of plain prose, say what got done this session, where things stand now, and the next step.',
+    'Behavior, not implementation. No preamble, no lists, no markdown, no code.',
+    ...(label === null ? [] : [`The session's work: ${label}`]),
+  ].join('\n')
+
+// One paragraph of plain text, whatever the model wrapped it in; the patch/focus label leads when there is one.
+export const accountNote = (reply: string, label: string | null): string | null => {
+  const text = reply.replace(/```[\s\S]*?```/g, '').replace(/\s+/g, ' ').trim()
+  if (text === '') return null
+  return truncate(label === null ? text : `${label}: ${text}`, MAX_ACCOUNT)
+}
+
+// A fresh session has nothing to account for, so a failed or empty fork leaves just the label.
+const account = async ($: EngineInterface, label: string | null): Promise<string | null> => {
+  try {
+    const forked = await $.model.fork({ prompt: accountPrompt(label) })
+    if (forked.isAnswered) return accountNote(forked.text, label) ?? label
+    $.ui.log(`wrap: no account (${forked.reason})`, { to: 'debug' })
+  } catch (err) {
+    $.ui.log(`wrap: account threw: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
+  }
+  return label
+}
+
 // Informational only: a count, never a warning.
 export const uncommittedLine = (porcelain: string): string | null => {
   const count = porcelain.split('\n').filter(Boolean).length
@@ -32,7 +61,12 @@ export const uncommittedLine = (porcelain: string): string | null => {
 
 const wrap = async ($: EngineInterface, args: string): Promise<{ text: string }> => {
   const typed = args.replace(/\s+/g, ' ').trim()
-  const note = typed !== '' ? truncate(typed, MAX_NOTE) : autoNote(await read($, activePatches), await read($, focus))
+  let note: string | null
+  if (typed !== '') note = truncate(typed, MAX_NOTE)
+  else {
+    $.ui.toast('Writing up where you left off…')
+    note = await account($, autoNote(await read($, activePatches), await read($, focus)))
+  }
   if (note === null) return { text: 'Nothing to save yet. Add a note: /wrap <where you left off>' }
   const cwd = await $.session.cwd()
   try {
@@ -53,7 +87,7 @@ export const registerWrap = (on: On): void => {
     await $.command
       .register({
         name: 'wrap',
-        description: 'Leave a where-I-left-off note for next session: /wrap <note>, or /wrap alone to save the current patch/focus',
+        description: 'Leave a where-I-left-off note for next session: /wrap <note>, or /wrap alone to have Cody write up what got done',
         argumentHint: '[note]',
         immediate: true,
       })
