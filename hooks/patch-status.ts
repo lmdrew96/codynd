@@ -173,9 +173,11 @@ export const registerPatchStatus = (on: On, options: PluginOptions): void => {
     return result
   })
 
+  // Awaited, so the patch list is current before Cody sees the result: a background refresh lost
+  // the race to Cody's next edit, and the patch-or-focus reminder read the old, empty list.
   on('tool.call', { tool: PATCH_WRITE_TOOL }, async ($, e, next) => {
     const ran = await next(e)
-    void refresh($, server)
+    await refresh($, server)
     return ran
   })
 }

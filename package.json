@@ -1,6 +1,6 @@
 {
   "name": "codynd",
-  "version": "0.28.0",
+  "version": "0.28.1",
   "description": "ND-friendly mods for Claude Code",
   "license": "MIT",
   "scripts": {

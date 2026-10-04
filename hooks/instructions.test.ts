@@ -14,8 +14,12 @@ describe('helpers', () => {
 
 type Seen = { toasts: string[]; reads: string[] }
 
-// The engine beneath the plugin. `rules` is rules.md's text, or null when it's missing.
-const world = (on: On, rules: string | null = RULES): Seen => {
+// While closed, ChaosPatch's patch list waits until the test opens it.
+type Gate = { isClosed: boolean; open: () => void }
+
+// The engine beneath the plugin. `rules` is rules.md's text, or null when it's missing;
+// `patches` is what ChaosPatch lists as in progress.
+const world = (on: On, rules: string | null = RULES, patches = '[]', gate?: Gate): Seen => {
   const seen: Seen = { toasts: [], reads: [] }
   on('ui.toast', (_$, e) => {
     seen.toasts.push(e.text)
@@ -25,7 +29,10 @@ const world = (on: On, rules: string | null = RULES): Seen => {
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('session.cwd', () => ({ value: '/x/codynd' }))
   on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
-  on('mcp.call', () => ({ value: { content: [{ type: 'text', text: '[]' }], isError: false } }))
+  on('mcp.call', async (_$, e) => {
+    if (gate?.isClosed === true && e.tool === 'cp_list_all_patches') await new Promise<void>(resolve => (gate.open = resolve))
+    return { value: { content: [{ type: 'text', text: e.tool === 'cp_list_all_patches' ? patches : '[]' }], isError: false } }
+  })
   on('tool.register', (_$, e) => ({ value: { tool: `mcp__codynd__${e.name}` } }))
   on('command.register', (_$, e) => ({ value: { command: e.name } }))
   on('fs.read', (_$, e) => {
@@ -94,6 +101,25 @@ describe('patch-or-focus reminder', () => {
     await edit($)
     await callTool($, 'mcp__claude_ai_ChaosPatch__cp_complete_patch', { patch_id: 'x', note: 'Shipped' })
     expect((await edit($)).context).toEqual([PATCH_OR_FOCUS])
+  })
+
+  test('starting a patch returns only once the patch list is current, so the next edit is covered', async ($, on) => {
+    const gate: Gate = { isClosed: false, open: () => undefined }
+    const listed = JSON.stringify([{ title: '#X', project_slug: 'codynd', project_name: 'CodyND', started_at: '2026-10-04T17:00:00Z' }])
+    world(on, RULES, listed, gate)
+    await $.session.start({ cwd: '/x/codynd', surface: 'terminal', isInteractive: true })
+    gate.isClosed = true
+    const call = $.tool.call as unknown as (input: Record<string, unknown>) => Promise<unknown>
+    const started = call({ tool: 'mcp__claude_ai_ChaosPatch__cp_start_patch', patch_id: 'x' })
+    const settle = async (): Promise<string> => {
+      for (let i = 0; i < 200; i++) await Promise.resolve()
+      return 'still waiting'
+    }
+    // A background refresh would hand the result back now, before the list arrives, and Cody's next edit would race it.
+    expect(await Promise.race([started.then(() => 'returned'), settle()])).toBe('still waiting')
+    gate.open()
+    await started
+    expect((await edit($)).context ?? []).toEqual([])
   })
 
   test('never a toast: it is for Cody only', async ($, on) => {
