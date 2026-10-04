@@ -1,6 +1,6 @@
 {
   "name": "codynd",
-  "version": "0.26.1",
+  "version": "0.27.0",
   "description": "ND-friendly mods for Claude Code: patch status line and friends.",
   "author": {
     "name": "Nae (ADHDesigns)",
@@ -19,6 +19,12 @@
       "type": "boolean",
       "title": "Done chime sound",
       "description": "Play a chime when a ChaosPatch patch is completed.",
+      "default": true
+    },
+    "attentionChimeSound": {
+      "type": "boolean",
+      "title": "Attention chime sound",
+      "description": "Play a short chime when Claude needs you: a permission prompt or a question.",
       "default": true
     },
     "soundtrackPlaylist": {

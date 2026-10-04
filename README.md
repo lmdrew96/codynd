@@ -10,6 +10,7 @@ Neurodivergent-friendly mods for Claude Code that keep your work visible and you
 | --- | --- |
 | **Patch status line** | Shows `🩹 <title> · 24m` under the prompt for the [ChaosPatch](https://chaospatch.adhdesigns.dev) patch in progress in *this* repo (`(+N)` if there are more). The time reads `<1m`, `24m`, `1h 10m`, then whole days (`3d`), redrawn once a minute. Patches from other projects stay quiet. With no patch or focus, the line shows your current work stretch instead (`⏱ 45m in`, the same clock as the body check), hidden while you're on a break, so it never counts up while you're away. |
 | **Done chime** | When a patch is completed, a 10-second toast (`🎉 Patch done: <title>`) and a short chime. Each session's first win gets the classic two-note chime; after that the sound and the toast's opener rotate (`✨ Shipped`, `🌱 One less thing`, …), never the same twice running, so the reward stays fresh. If the tree is fully committed and the session's latest test run (if any) passed, a second toast follows: `🟢 Clean stopping point. Safe to walk away.` Otherwise it stays silent; it never runs tests itself. Failed calls don't celebrate. Other CodyND toasts that arrive meanwhile wait their turn, so the win is never covered up. |
+| **Attention chime** | A short rising "hey?" sound whenever Claude is waiting on you: a permission prompt, a question, or an MCP server asking for input. Not when Claude has just finished and you've been away; that isn't a decision. Prompts that land together chime once. |
 | **Patch soundtrack** | `/soundtrack on` and starting a patch puts on focus music: Spotify's Deep Focus, or your own playlist in settings. If something's already playing, it's left alone. When the patch is done, music the soundtrack started fades out over about a second, under the chime, and pauses. Off until you turn it on, and it stays how you left it across sessions. Drives the Spotify app on macOS and never opens it; if Spotify isn't running, nothing happens. Works from `/patches` and `/fried` too. Headless runs never touch the music. |
 | **Error decoder** | When a build, typecheck, test or lint run fails, one toast says what broke in plain English: `🧩 TypeScript can't find \`clock\`, probably a missing import or a typo (in wins.ts:81).` Common failures (TypeScript errors, missing modules, failing tests, lint counts, syntax errors) are read straight from the output; anything else gets one quick Haiku sentence. The same error again within 5 minutes stays quiet, it waits behind a done toast, and commands like `grep` that just return non-zero never trigger it. |
 | **Instruction hooks** | Quiet reminders for Claude, never for you, so the rules in your instructions don't fade in a long session. Every conversation starts with the rules in `rules.md` (one file, plain text, edit it freely). The first file edit with no patch in progress and no focus set carries a note asking Claude to start the patch or set a focus. It comes back after a topic switch: the focus changes or clears, or a patch is completed. Completing a patch without a completion note gets a nudge to add one. None of it shows on your screen. |
@@ -72,6 +73,7 @@ Change these in `/config` (they're stored under `pluginConfigs.codynd` in your s
 | --- | --- | --- |
 | `chaospatchServer` | `claude.ai ChaosPatch` | Your ChaosPatch MCP server's name, as `/mcp` lists it. |
 | `doneChimeSound` | `true` | Play the chime when a patch is completed. |
+| `attentionChimeSound` | `true` | Play the attention chime when Claude needs you. |
 | `soundtrackPlaylist` | Spotify's Deep Focus | What the soundtrack plays when a patch starts: a `spotify:` URI or an `open.spotify.com` link. |
 | `soundtrackFadeOnDone` | `true` | Fade out and pause the soundtrack's music when a patch is completed. |
 | `bodyCheckMinutes` | `90` | Minutes of continuous work before the body-check nudge. |
@@ -118,6 +120,7 @@ hooks/focus.tsx              focus slot (set_focus / clear_focus tools, /topic, 
 hooks/toast-queue.ts         holds toasts behind a done toast
 hooks/done-chime.ts          done chime
 hooks/soundtrack.ts          patch soundtrack, /soundtrack
+hooks/attention-chime.ts     attention chime
 hooks/error-decoder.ts       error decoder toast
 hooks/session-clock.ts       session clock and /snooze
 hooks/reentry-card.tsx       re-entry card, /recap
@@ -131,7 +134,7 @@ hooks/instructions.ts        instruction hooks (rules block, patch-or-focus and 
 rules.md                     the rule list every conversation starts with
 hooks/*.test.ts              tests (claude plugin test)
 types/index.d.ts             $.state contract (card, board, active patches, focus, park offer)
-sounds/*.wav                 the chimes (original synthesized clips; done.wav is the classic)
+sounds/*.wav                 the chimes (original synthesized clips; done.wav is the classic, attention.wav the "hey?")
 ```
 
 ## License

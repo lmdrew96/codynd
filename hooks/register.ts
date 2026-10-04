@@ -1,4 +1,5 @@
 import type { Register } from 'claude-code'
+import { registerAttentionChime } from './attention-chime.ts'
 import { registerDoneChime } from './done-chime.ts'
 import { registerErrorDecoder } from './error-decoder.ts'
 import { registerFocus } from './focus.tsx'
@@ -20,6 +21,7 @@ export const register: Register = (on, options) => {
   registerPatchStatus(on, options)
   registerDoneChime(on, options)
   registerSoundtrack(on, options)
+  registerAttentionChime(on, options)
   registerErrorDecoder(on)
   registerSessionClock(on, options)
   registerReentryCard(on, options)
