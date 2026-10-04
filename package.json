@@ -1,6 +1,6 @@
 {
   "name": "codynd",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "ND-friendly mods for Claude Code",
   "scripts": {
     "typecheck": "tsc -p .",

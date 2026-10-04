@@ -1,6 +1,6 @@
 {
   "name": "codynd",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "ND-friendly mods for Claude Code: patch status line and friends.",
   "author": {
     "name": "Nae (ADHDesigns)",
@@ -12,6 +12,12 @@
       "title": "ChaosPatch MCP server",
       "description": "The ChaosPatch server's name as /mcp lists it.",
       "default": "claude.ai ChaosPatch"
+    },
+    "doneChimeSound": {
+      "type": "boolean",
+      "title": "Done chime sound",
+      "description": "Play a chime when a ChaosPatch patch is completed.",
+      "default": true
     }
   }
 }

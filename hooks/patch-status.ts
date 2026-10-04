@@ -33,10 +33,12 @@ export const patchesForCwd = (patches: Patch[], cwd: string): Patch[] => {
     .sort((a, b) => (b.started_at ?? '').localeCompare(a.started_at ?? ''))
 }
 
+export const truncate = (s: string, max = MAX_TITLE): string => (s.length > max ? `${s.slice(0, max - 1)}…` : s)
+
 export const formatStatus = (patches: Patch[]): string | undefined => {
   const [newest, ...rest] = patches
   if (newest === undefined) return undefined
-  const title = newest.title.length > MAX_TITLE ? `${newest.title.slice(0, MAX_TITLE - 1)}…` : newest.title
+  const title = truncate(newest.title)
   return rest.length > 0 ? `🩹 ${title} (+${rest.length})` : `🩹 ${title}`
 }
 
