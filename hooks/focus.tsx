@@ -4,10 +4,13 @@ import { KINDLING_SERVER, kindleArgs } from './park.ts'
 import { truncate } from './patch-status.ts'
 
 // #12 Focus slot: Cody names the current non-patch work; the status line shows "🎯 <focus>" when no patch is active.
-// /topic is the manual override.
+// /topic is the manual override; bare /topic asks Cody to name the work.
 // Built against Claude Code 2.1.289.
 
 const MAX_FOCUS = 40
+// What bare /topic hands Cody: name the work and set it, nothing else.
+export const NAME_IT_PROMPT =
+  'Name what we\'re working on right now: call set_focus with a short plain label (40 chars max). Just set it; no need to do anything else.'
 // Matched by pattern, not literal: a literal tool name sends tsc through every known tool's types (out of memory).
 const SET_TOOL = /^mcp__codynd__set_focus$/
 const CLEAR_TOOL = /^mcp__codynd__clear_focus$/
@@ -40,6 +43,15 @@ const changeFocus = async ($: EngineInterface, label: string | null, offered: Se
   if (offer === null) return
   offered.add(offer)
   await update($, parkOffer, () => offer)
+}
+
+const askCodyToNameIt = async ($: EngineInterface): Promise<void> => {
+  try {
+    await $.prompt.submit({ text: NAME_IT_PROMPT })
+  } catch (err) {
+    $.ui.log(`focus: asking Cody to name the work failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
+    $.ui.toast("Couldn't ask Cody; try /topic <label>.")
+  }
 }
 
 const dismissOffer = async ($: EngineInterface): Promise<void> => {
@@ -86,8 +98,8 @@ export const registerFocus = (on: On, options: PluginOptions): void => {
     await $.command
       .register({
         name: 'topic',
-        description: 'Set the status-line focus by hand: /topic <label>, or /topic alone to clear',
-        argumentHint: '[label]',
+        description: 'Set the status-line focus: /topic <label> by hand, /topic alone to have Cody name it, /topic clear to clear',
+        argumentHint: '[label | clear]',
         immediate: true,
       })
       .catch((err: unknown) => $.ui.log(`focus: /topic not registered: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' }))
@@ -108,7 +120,14 @@ export const registerFocus = (on: On, options: PluginOptions): void => {
   })
 
   on('command.run', { command: 'topic' }, async ($, e) => {
-    const label = cleanFocus(e.args)
+    const typed = e.args.trim()
+    if (typed === '') {
+      // A command.run hook can't submit a prompt (it would wait on the turn it holds), so hand it
+      // to a timer that fires once this command has returned.
+      $.clock.after(0, () => void askCodyToNameIt($))
+      return { text: 'Asking Cody to name it…' }
+    }
+    const label = typed.toLowerCase() === 'clear' ? null : cleanFocus(typed)
     await changeFocus($, label, offered)
     return { text: label === null ? 'Focus cleared.' : `Focus: ${label}` }
   })

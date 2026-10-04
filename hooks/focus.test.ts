@@ -1,6 +1,6 @@
 import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 import type { On, RenderElement } from 'claude-code'
-import { cleanFocus, offerFor } from './focus.tsx'
+import { NAME_IT_PROMPT, cleanFocus, offerFor } from './focus.tsx'
 import { statusLine } from './patch-status.ts'
 
 const PATCH = { title: '#12 Focus slot', project_slug: 'codynd', project_name: 'CodyND', started_at: null }
@@ -27,10 +27,18 @@ describe('helpers', () => {
   })
 })
 
+// What the line showed, plus the clock and any prompts the plugin submitted.
+type Seen = (string | undefined)[] & { clock: ReturnType<typeof mock.clock>; prompts: string[] }
+
 // The engine beneath the plugin, with `patches` in progress for this repo.
-const world = (on: On, patches: unknown[] = []): (string | undefined)[] => {
+const world = (on: On, patches: unknown[] = []): Seen => {
   const statuses: (string | undefined)[] = []
-  mock.clock(on)
+  const prompts: string[] = []
+  const clock = mock.clock(on)
+  on('prompt.submit', (_$, e) => {
+    prompts.push(e.text)
+    return { text: e.text }
+  })
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('session.end', () => ({ sessionId: 's1' }))
   on('session.cwd', () => ({ value: '/x/codynd' }))
@@ -43,7 +51,7 @@ const world = (on: On, patches: unknown[] = []): (string | undefined)[] => {
     statuses.push(e.text)
     return { value: undefined }
   })
-  return statuses
+  return Object.assign(statuses, { clock, prompts })
 }
 
 // Cody calling the tool, as the model would. Loosely typed (TS2589 otherwise).
@@ -77,13 +85,29 @@ describe('focus slot', () => {
     expect(statuses.at(-1)?.startsWith('🩹 #12 Focus slot')).toBe(true)
   })
 
-  test('/topic sets by hand; bare /topic clears', async ($, on) => {
+  test('/topic sets by hand; /topic clear clears', async ($, on) => {
     const statuses = world(on)
     await start($)
     expect(await focusCommand($, 'Reading the mod docs')).toBe('Focus: Reading the mod docs')
     expect(statuses.at(-1)).toBe('🎯 Reading the mod docs')
-    expect(await focusCommand($, '')).toBe('Focus cleared.')
+    expect(await focusCommand($, 'Clear')).toBe('Focus cleared.')
     expect(statuses.at(-1)).toBe('⏱ <1m in')
+  })
+
+  test('bare /topic asks Cody to name the work, and leaves the focus alone', async ($, on) => {
+    const statuses = world(on)
+    const { clock, prompts } = statuses
+    await start($)
+    await focusCommand($, 'Reading the mod docs')
+    expect(await focusCommand($, '   ')).toBe('Asking Cody to name it…')
+    // Submitted from a timer just after the command returns.
+    await clock.advance(1)
+    for (let i = 0; i < 50; i++) await Promise.resolve()
+    expect(prompts).toEqual([NAME_IT_PROMPT])
+    expect(statuses.at(-1)).toBe('🎯 Reading the mod docs')
+    // Cody answers with set_focus, as the prompt asks.
+    await callTool($, 'mcp__codynd__set_focus', { text: 'Wiring /topic to Cody' })
+    expect(statuses.at(-1)).toBe('🎯 Wiring /topic to Cody')
   })
 
   test('the focus ends with the session', async ($, on) => {
