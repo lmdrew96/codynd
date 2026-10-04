@@ -107,3 +107,30 @@ describe('re-entry band', () => {
     expect(await ui.find({ type: 'Text', text: /Welcome back/ })).toBeUndefined()
   })
 })
+
+const recap = async ($: Engine): Promise<string | undefined> =>
+  (await $.command.run({ command: 'recap', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } })).text
+
+describe('/recap', () => {
+  test('brings the card back after the first prompt, freshly loaded', async ($, on) => {
+    const inProgress = [patch('#4 Context re-entry card', 'now')]
+    world(on, inProgress, [])
+    await start($)
+    await $.prompt.submit({ text: 'hi', wait: false, origin: { kind: 'composer' } })
+    inProgress[0] = patch('/recap', 'later')
+    expect(await recap($)).toBeUndefined()
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /Welcome back/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /\/recap/ })).toBeDefined()
+    await ui.press({ key: 'dismiss' })
+    expect(await ui.find({ type: 'Text', text: /Welcome back/ })).toBeUndefined()
+  })
+
+  test('says so in one line when there is nothing to show', async ($, on) => {
+    world(on, [], [], 128)
+    await start($)
+    expect(await recap($)).toBe('Nothing to recap here yet.')
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /Welcome back/ })).toBeUndefined()
+  })
+})

@@ -38,7 +38,8 @@ const listPatches = async ($: EngineInterface, server: string, args: Record<stri
 }
 
 // Each source fails on its own: a repo with no git history still gets its next step, and vice versa.
-const loadCard = async ($: EngineInterface, server: string): Promise<void> => {
+// Resolves whether there was anything to show; nothing clears the card, so a stale one never lingers.
+const loadCard = async ($: EngineInterface, server: string): Promise<boolean> => {
   const cwd = await $.session.cwd()
   let lastCommit: ReentryCard['lastCommit'] = null
   let leftOff: ReentryCard['leftOff'] = null
@@ -62,7 +63,9 @@ const loadCard = async ($: EngineInterface, server: string): Promise<void> => {
   } catch (err) {
     $.ui.log(`reentry-card: reading /wrap note failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
   }
-  if (leftOff !== null || lastCommit !== null || next !== null) await update($, card, () => ({ leftOff, lastCommit, next }))
+  const hasAny = leftOff !== null || lastCommit !== null || next !== null
+  await update($, card, () => (hasAny ? { leftOff, lastCommit, next } : null))
+  return hasAny
 }
 
 const hide = async ($: EngineInterface): Promise<void> => {
@@ -75,7 +78,21 @@ export const registerReentryCard = (on: On, options: PluginOptions): void => {
   on('session.start', { isInteractive: true }, async ($, e, next) => {
     const result = await next(e)
     void loadCard($, server)
+    await $.command
+      .register({
+        name: 'recap',
+        description: 'Bring the welcome-back card up again: left-off note, last commit, next patch',
+        immediate: true,
+      })
+      .catch((err: unknown) => $.ui.log(`reentry-card: /recap not registered: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' }))
     return result
+  })
+
+  // For a window left open: reload the card fresh and show it until Dismiss or the next prompt.
+  on('command.run', { command: 'recap' }, async $ => {
+    if (!(await loadCard($, server))) return { text: 'Nothing to recap here yet.' }
+    await update($, isHidden, () => false)
+    return {}
   })
 
   // The card is for re-entry: once Nae types her first prompt, it has done its job.
