@@ -31,6 +31,15 @@ export const isTestCommand = (command: string): boolean => TEST_COMMAND.test(com
 
 export const testRunFailed = (isError: boolean, output: string): boolean => isError || FAIL_SUMMARY.test(output)
 
+// Core's text when it set it; else Bash's own result, a string or { stdout, stderr }.
+// error-decoder.ts reads Bash output the same way.
+export const outputOf = (ran: { text?: string; result?: unknown }): string => {
+  if (ran.text !== undefined) return ran.text
+  if (typeof ran.result === 'string') return ran.result
+  const r = (ran.result ?? {}) as { stdout?: unknown; stderr?: unknown }
+  return [r.stdout, r.stderr].filter((s): s is string => typeof s === 'string').join('\n')
+}
+
 // Clean: nothing uncommitted, and no failing test run this session (none run counts as fine).
 export const isCleanStop = (porcelain: string, testFailed: boolean | null): boolean =>
   porcelain.trim() === '' && testFailed !== true
@@ -124,7 +133,7 @@ export const registerDoneChime = (on: On, options: PluginOptions): void => {
     const ran = await next(e)
     const command = (e as { command?: unknown }).command
     if (ran.deny === undefined && typeof command === 'string' && isTestCommand(command)) {
-      const failed = testRunFailed(ran.isError === true, ran.text ?? '')
+      const failed = testRunFailed(ran.isError === true, outputOf(ran))
       await update($, lastTestFailed, () => failed).catch((err: unknown) =>
         $.ui.log(`done-chime: recording the test run failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' }),
       )

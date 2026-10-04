@@ -1,5 +1,5 @@
 import type { EngineInterface, On } from 'claude-code'
-import { isTestCommand, testRunFailed } from './done-chime.ts'
+import { isTestCommand, outputOf, testRunFailed } from './done-chime.ts'
 import { truncate } from './patch-status.ts'
 
 // Error decoder: when a build, typecheck, test or lint run fails, one toast says what broke and the
@@ -94,14 +94,6 @@ const askModel = async ($: EngineInterface, command: string, output: string): Pr
   }
   const line = reply.text.trim().split('\n')[0]?.trim()
   return line ? truncate(line, 120) : undefined
-}
-
-// Core's text when it set it; else Bash's own result, a string or { stdout, stderr }.
-const outputOf = (ran: { text?: string; result?: unknown }): string => {
-  if (ran.text !== undefined) return ran.text
-  if (typeof ran.result === 'string') return ran.result
-  const r = (ran.result ?? {}) as { stdout?: unknown; stderr?: unknown }
-  return [r.stdout, r.stderr].filter((s): s is string => typeof s === 'string').join('\n')
 }
 
 // The first line that looks like the error: a repeat key for failures no pattern decodes.

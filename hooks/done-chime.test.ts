@@ -177,4 +177,11 @@ describe('clean stopping point', () => {
     await completePatch($)
     expect(seen.toasts.at(-1)).toBe(STOP_TOAST)
   })
+
+  test('a piped run that exits 0 but reports failures is still a failure', async ($, on) => {
+    const seen = stopWorld(on, { porcelain: '' }, { output: ' 40 pass\n 2 fail\n', isError: false })
+    await runBash($, 'pnpm test | tail -3')
+    await completePatch($)
+    expect(seen.toasts).toEqual(['🎉 Patch done!'])
+  })
 })
