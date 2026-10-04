@@ -13,6 +13,7 @@ import { registerReentryCard } from './reentry-card.tsx'
 import { registerSessionClock } from './session-clock.ts'
 import { registerSoundtrack } from './soundtrack.ts'
 import { registerToastQueue } from './toast-queue.ts'
+import { registerToolbox } from './toolbox.ts'
 import { registerWhatChanged } from './whatchanged.ts'
 import { registerWins } from './wins.ts'
 import { registerWrap } from './wrap.ts'
@@ -35,4 +36,5 @@ export const register: Register = (on, options) => {
   registerWhatChanged(on)
   registerNextEvent(on, options)
   registerInstructions(on)
+  registerToolbox(on)
 }

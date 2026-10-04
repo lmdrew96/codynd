@@ -25,6 +25,7 @@ Neurodivergent-friendly mods for Claude Code that keep your work visible and you
 | **`/whatchanged`** | What this session changed, without reading diffs: 1–3 plain-language lines on what the code does now, the files touched, and a heads-up for anything worth a second look (dependencies, config, auth, database, deletions). It compares against where the session started, commits and uncommitted work alike. The summary comes from a side call that knows the session, so it doesn't add to the conversation. `/whatchanged patch` keeps it to the patch in progress; other words name a patch. Nothing changed yet? It says so kindly. |
 | **`/patches`** | Opens this repo's ChaosPatch board in a pane: in-progress patches with **Done**, open ones by priority with **Start** and **→ Cody**, which hands the patch to Claude as a prompt (number keys press it). Done plays the chime. Esc closes. |
 | **`/fried`** | For tired evenings when your brain still wants a goal: a pane of open patches tagged `energy:low`, across every project, by priority. **Start** works on any of them; **→ Cody** shows on this repo's only. Nothing tiny queued? It says so, and suggests rest. |
+| **Toolbox manifest** | Writes what's installed on this machine (skills, plugins, MCP servers, CodyND's mods) to `~/ChaosToolbox/toolbox-manifest.json`, for a claude.ai routine that can't read `~/.claude`. It runs at session start, at most once every 6 hours, and on demand with `/toolbox-sync`. Names and descriptions only: no env values, headers, tokens or full URLs (a server's host at most). |
 
 ## Install
 
@@ -98,6 +99,7 @@ Change these in `/config` (they're stored under `pluginConfigs.codynd` in your s
 | `/park <thought>` | Park a side-thought in Kindling. |
 | `/soundtrack [on \| off]` | Turn the patch soundtrack on or off; alone, say which it is. |
 | `/snooze [minutes]` | Push the next body-check nudge out (default 30 minutes). |
+| `/toolbox-sync` | Rewrite the toolbox manifest now. |
 
 ## Development
 
@@ -131,6 +133,7 @@ hooks/quick-patch.ts         /patch
 hooks/wins.ts                /wins, /wins-all and /wins-week
 hooks/wrap.ts                /wrap
 hooks/whatchanged.ts         /whatchanged
+hooks/toolbox.ts             toolbox manifest, /toolbox-sync
 hooks/instructions.ts        instruction hooks (rules block, patch-or-focus and completion-note reminders)
 rules.md                     the rule list every conversation starts with
 hooks/*.test.ts              tests (claude plugin test)
