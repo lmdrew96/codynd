@@ -1,6 +1,6 @@
 import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { closedSince, formatAllWins, formatRepoWins, forRepo, type DonePatch } from './wins.ts'
+import { busiestDay, closedSince, formatAllWins, formatRepoWins, formatWeekWins, forRepo, type DonePatch } from './wins.ts'
 
 // Local midnight on the evening of 2026-10-03 (New York) / morning of 2026-10-04 (Tokyo), from `date -v0H -v0M -v0S +%s`.
 const NY_MIDNIGHT = 1791000000 * 1000 // 2026-10-03 00:00 -0400
@@ -122,5 +122,58 @@ describe('/wins', () => {
     expect(await run($, '')).toBe(
       "🏆 Today in codynd\nCommits (1)\n  • v0.7.1: document the new mods\n(Couldn't reach ChaosPatch, so closed patches are missing.)",
     )
+  })
+})
+
+// The week of Monday 2026-09-28 in New York: each local midnight, Monday first, from `date -v0H -v0M -v0S -v-Nd +%s`.
+const NY_MONDAY = 1790568000 // 2026-09-28 00:00 -0400
+const NY_WEEK = [0, 1, 2, 3, 4, 5, 6].map(d => (NY_MONDAY + d * 86400) * 1000)
+
+describe('week wins', () => {
+  const thu1 = done('thu 1', '2026-10-02T01:00:00Z') // 21:00 NY Thursday Oct 1
+  const thu2 = done('thu 2', '2026-10-01T15:00:00Z') // 11:00 NY Thursday
+  const mon = done('mon', '2026-09-28T04:00:00Z', 'Folio') // Monday 00:00 NY exactly
+
+  test('busiest day is by local day, and only shows when wins span days', () => {
+    expect(busiestDay([thu1, thu2, mon], NY_WEEK)).toEqual({ day: 'Thursday', count: 2 })
+    expect(busiestDay([thu1, thu2], NY_WEEK)).toBeNull()
+  })
+
+  test('header with the total, busiest day, then projects; a quiet week stays kind', () => {
+    expect(formatWeekWins([thu1, thu2, mon], NY_WEEK)).toBe(
+      '3 patches shipped this week 🎉\nBusiest day: Thursday (2)\nCodyND (2)\n  ✓ thu 1\n  ✓ thu 2\nFolio (1)\n  ✓ mon',
+    )
+    expect(formatWeekWins([mon], NY_WEEK)).toBe('1 patch shipped this week 🎉\nFolio (1)\n  ✓ mon')
+    expect(formatWeekWins([], NY_WEEK)).toBe(
+      '🏆 This week across all projects\nNothing closed yet this week. Rest and setup count too.',
+    )
+  })
+})
+
+describe('/wins-week', () => {
+  test('asks ChaosPatch for everything since Monday 00:00 local, across projects', async ($, on) => {
+    const calls: Record<string, unknown>[] = []
+    mock.clock(on)
+    on('session.start', (_$, e) => ({ cwd: e.cwd }))
+    on('session.cwd', () => ({ value: '/x/codynd' }))
+    on('process.run', (_$, e) => {
+      // Sunday 2026-10-04 in New York; -v-Nd steps back N local days from today's midnight.
+      const back = Number(e.argv.find(a => /^-v-\d+d$/.test(a))?.slice(3, -1) ?? 0)
+      const stdout = e.argv[1] === '+%u' ? '7\n' : `${NY_MONDAY + (6 - back) * 86400}\n`
+      return { value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+    })
+    on('mcp.call', (_$, e) => {
+      calls.push({ tool: e.tool, ...e.args })
+      const patches = [done('#11 /patches', '2026-10-04T03:22:49Z'), done('Archive mode', '2026-09-29T15:00:00Z', 'Chicken Scratch')]
+      return { value: { content: [{ type: 'text', text: JSON.stringify({ patches }) }], isError: false } }
+    })
+    on('command.register', (_$, e) => ({ value: { command: e.name } }))
+    on('tool.register', (_$, e) => ({ value: { tool: `mcp__codynd__${e.name}` } }))
+    for (const ev of ['ui.status', 'ui.log', 'ui.toast'] as const) on(ev, () => ({ value: undefined }))
+
+    expect(await run($, '', 'wins-week')).toBe(
+      '2 patches shipped this week 🎉\nBusiest day: Tuesday (1)\nCodyND (1)\n  ✓ #11 /patches\nChicken Scratch (1)\n  ✓ Archive mode',
+    )
+    expect(calls).toContainEqual({ tool: 'cp_get_velocity', completed_since: '2026-09-28T04:00:00.000Z' })
   })
 })

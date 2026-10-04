@@ -17,7 +17,7 @@ Neurodivergent-friendly mods for Claude Code that keep your work visible and you
 | **`/wrap`** | `/wrap <note>` leaves a where-I-left-off note for this repo; the next session's re-entry card shows it (`Left off: <note> · 2h ago`). Bare `/wrap` saves the current patch or focus. Also mentions uncommitted files, as information only. One note per repo, kept on this machine. |
 | **`/park`** | `/park <thought>` saves a side-thought to [Kindling](https://kindling.adhdesigns.dev), tagged `parked` and `project:<repo>`, and confirms with a toast. Tangents get caught, not policed. It runs the moment you hit Enter, even while Claude is mid-turn. If it can't save, the thought is echoed back so it isn't lost. |
 | **`/patch`** | `/patch <rough idea>` turns an "oh, we should also…" into a real ChaosPatch patch for this repo: a title, a one-line summary and acceptance criteria, drafted from the session so it knows what you're working on. Runs mid-turn without interrupting. Tagged `quick-capture`, plus a guessed `energy:low`/`energy:med`/`energy:high` for `/fried`; your exact words are kept in the patch's spec, and if drafting fails your raw words are filed, tagged `rough`. |
-| **`/wins`** | Today's wins in this repo: patches closed and commits made since local midnight. `/wins-all` shows closed patches across every project. An empty day gets a gentle line, never a guilt trip. |
+| **`/wins`** | Today's wins in this repo: patches closed and commits made since local midnight. `/wins-all` shows closed patches across every project, and `/wins-week` shows every project's closes since Monday with the total and the busiest day. An empty day gets a gentle line, never a guilt trip. |
 | **`/patches`** | Opens this repo's ChaosPatch board in a pane: in-progress patches with **Done**, open ones by priority with **Start** and **→ Cody**, which hands the patch to Claude as a prompt (number keys press it). Done plays the chime. Esc closes. |
 | **`/fried`** | For tired evenings when your brain still wants a goal: a pane of open patches tagged `energy:low`, across every project, by priority. **Start** works on any of them; **→ Cody** shows on this repo's only. Nothing tiny queued? It says so, and suggests rest. |
 
@@ -84,6 +84,7 @@ Change these in `/config` (they're stored under `pluginConfigs.codynd` in your s
 | `/patch <idea>` | Draft and file a patch for this repo from a rough idea. |
 | `/wins` | Today's closed patches and commits in this repo. |
 | `/wins-all` | Today's closed patches across every project. |
+| `/wins-week` | This week's closed patches across every project, since Monday 00:00 local. |
 | `/park <thought>` | Park a side-thought in Kindling. |
 | `/snooze [minutes]` | Push the next body-check nudge out (default 30 minutes). |
 
@@ -113,7 +114,7 @@ hooks/reentry-card.tsx       re-entry card, /recap
 hooks/park.ts                /park
 hooks/patches-pane.tsx       /patches board, /fried
 hooks/quick-patch.ts         /patch
-hooks/wins.ts                /wins and /wins-all
+hooks/wins.ts                /wins, /wins-all and /wins-week
 hooks/wrap.ts                /wrap
 hooks/*.test.ts              tests (claude plugin test)
 types/index.d.ts             $.state contract (card, board, active patches, focus, park offer)
