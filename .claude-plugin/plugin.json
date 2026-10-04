@@ -1,11 +1,12 @@
 {
   "name": "codynd",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "ND-friendly mods for Claude Code: patch status line and friends.",
   "author": {
     "name": "Nae (ADHDesigns)",
     "url": "https://github.com/lmdrew96"
   },
+  "license": "MIT",
   "types": "./types/index.d.ts",
   "userConfig": {
     "chaospatchServer": {
