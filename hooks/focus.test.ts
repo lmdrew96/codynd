@@ -13,9 +13,9 @@ describe('helpers', () => {
   })
 
   test('a patch wins, then the focus, then nothing', () => {
-    expect(statusLine([PATCH], 'Debugging Tangle')).toBe('🩹 #12 Focus slot')
-    expect(statusLine([], 'Debugging Tangle')).toBe('🎯 Debugging Tangle')
-    expect(statusLine([], null)).toBeUndefined()
+    expect(statusLine({ patches: [PATCH], focus: 'Debugging Tangle' })).toBe('🩹 #12 Focus slot')
+    expect(statusLine({ patches: [], focus: 'Debugging Tangle' })).toBe('🎯 Debugging Tangle')
+    expect(statusLine({ patches: [], focus: null })).toBeUndefined()
   })
 
   test('only a replaced focus is offered, once', () => {
@@ -67,7 +67,7 @@ describe('focus slot', () => {
     expect((await callTool($, 'mcp__codynd__set_focus', { text: 'Debugging Tangle identity' })).result).toBe('Focus set: Debugging Tangle identity')
     expect(statuses.at(-1)).toBe('🎯 Debugging Tangle identity')
     await callTool($, 'mcp__codynd__clear_focus')
-    expect(statuses.at(-1)).toBeUndefined()
+    expect(statuses.at(-1)).toBe('⏱ <1m in')
   })
 
   test('an in-progress patch keeps the line while a focus is set', async ($, on) => {
@@ -83,7 +83,7 @@ describe('focus slot', () => {
     expect(await focusCommand($, 'Reading the mod docs')).toBe('Focus: Reading the mod docs')
     expect(statuses.at(-1)).toBe('🎯 Reading the mod docs')
     expect(await focusCommand($, '')).toBe('Focus cleared.')
-    expect(statuses.at(-1)).toBeUndefined()
+    expect(statuses.at(-1)).toBe('⏱ <1m in')
   })
 
   test('the focus ends with the session', async ($, on) => {
@@ -92,7 +92,7 @@ describe('focus slot', () => {
     await focusCommand($, 'Temporary')
     expect(statuses.at(-1)).toBe('🎯 Temporary')
     await $.session.end({ reason: 'clear' } as never)
-    expect(statuses.at(-1)).toBeUndefined()
+    expect(statuses.at(-1)).toBe('⏱ <1m in')
   })
 })
 

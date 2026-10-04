@@ -1,3 +1,4 @@
+import { atom, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 
 // #3 Session clock: a gentle body-check toast after a long stretch of continuous work.
@@ -6,7 +7,7 @@ import type { EngineInterface, On, PluginOptions } from 'claude-code'
 const MINUTE = 60_000
 const DEFAULT_INTERVAL_MIN = 90
 // No prompt from Nae for this long counts as a break: the streak starts over.
-const BREAK_MS = 20 * MINUTE
+export const BREAK_MS = 20 * MINUTE
 const CHECK_MS = MINUTE
 const DEFAULT_SNOOZE_MIN = 30
 const TOAST_MS = 15_000
@@ -47,6 +48,15 @@ export const parseSnooze = (args: string): number | undefined => {
 
 type Box = { streak: Streak | undefined }
 
+// Shared so the status line can show the stretch (patch-status.ts draws it).
+const workStretch = atom({ plugin: 'codynd', key: 'workStretch' } as const, null)
+
+const publish = async ($: EngineInterface, streak: Streak): Promise<void> => {
+  await update($, workStretch, () => ({ start: streak.start, lastActive: streak.lastActive })).catch((err: unknown) =>
+    $.ui.log(`session-clock: sharing the stretch failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' }),
+  )
+}
+
 const tick = async ($: EngineInterface, box: Box, intervalMs: number): Promise<void> => {
   const now = await $.clock.now()
   if (box.streak === undefined || !isNudgeDue(box.streak, now)) return
@@ -65,6 +75,7 @@ export const registerSessionClock = (on: On, options: PluginOptions): void => {
   on('session.start', { isInteractive: true }, async ($, e, next) => {
     const result = await next(e)
     box.streak = newStreak(await $.clock.now(), intervalMs)
+    await publish($, box.streak)
     // Immediate: snoozing shouldn't wait for a long turn to finish.
     await $.command.register({
       name: 'snooze',
@@ -79,6 +90,7 @@ export const registerSessionClock = (on: On, options: PluginOptions): void => {
     if (e.origin.kind === 'composer') {
       const now = await $.clock.now()
       box.streak = box.streak === undefined ? newStreak(now, intervalMs) : markActive(box.streak, now, intervalMs)
+      await publish($, box.streak)
     }
     return next(e)
   })

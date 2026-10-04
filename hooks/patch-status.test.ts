@@ -1,6 +1,6 @@
 import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { formatElapsed, formatStatus, normalize, patchesForCwd, type Patch } from './patch-status.ts'
+import { formatElapsed, formatStatus, normalize, patchesForCwd, statusLine, stretchSegment, type Patch } from './patch-status.ts'
 
 const patch = (title: string, project_slug: string, project_name: string, started_at: string): Patch => ({
   title,
@@ -74,8 +74,13 @@ const world = (on: On, answer: () => { text: string; isError: boolean }): (strin
   return statuses
 }
 
+const settle = async (): Promise<void> => {
+  for (let i = 0; i < 200; i++) await Promise.resolve()
+}
+
 const startSession = async ($: Engine): Promise<void> => {
   await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
+  await settle()
 }
 
 describe('status line', () => {
@@ -85,6 +90,7 @@ describe('status line', () => {
     const statuses = world(on, () => ({ text: JSON.stringify(PATCHES), isError: false }))
     await startSession($)
     await clock.advance(10)
+    await settle()
     expect(statuses.at(-1)).toBe('🩹 #1 Patch status line · 5m')
     await clock.advance(60_000)
     expect(statuses.at(-1)).toBe('🩹 #1 Patch status line · 6m')
@@ -95,7 +101,8 @@ describe('status line', () => {
     const statuses = world(on, () => ({ text: 'unreachable', isError: true }))
     await startSession($)
     await clock.advance(10)
-    expect(statuses.at(-1)).toBeUndefined()
+    await settle()
+    expect(statuses.at(-1)).toBe('⏱ <1m in')
   })
 
   test('refreshes after a patch is completed', async ($, on) => {
@@ -105,11 +112,31 @@ describe('status line', () => {
     on('tool.call', () => ({ result: 'ok' }))
     await startSession($)
     await clock.advance(10)
+    await settle()
     current = PATCHES.slice(1)
     // Loosely typed: tsc gives up expanding every connected MCP tool's input types here.
     const callTool = $.tool.call as unknown as (input: { tool: string; patch_id: string }) => Promise<unknown>
     await callTool({ tool: 'mcp__claude_ai_ChaosPatch__cp_complete_patch', patch_id: 'x' })
     await clock.advance(10)
-    expect(statuses.at(-1)).toBeUndefined()
+    await settle()
+    expect(statuses.at(-1)).toBe('⏱ <1m in')
+  })
+})
+
+describe('work stretch', () => {
+  const MIN = 60_000
+  const stretch = { start: 0, lastActive: 40 * MIN }
+
+  test('shows how long the stretch has run, hidden on a break', () => {
+    expect(stretchSegment(stretch, 45 * MIN)).toBe('⏱ 45m in')
+    expect(stretchSegment(stretch, 130 * MIN)).toBeUndefined()
+    expect(stretchSegment({ start: 0, lastActive: 0 }, 30 * 1000)).toBe('⏱ <1m in')
+    expect(stretchSegment(null, 45 * MIN)).toBeUndefined()
+  })
+
+  test('only when there is no patch or focus', () => {
+    expect(statusLine({ patches: [], focus: null, now: 45 * MIN, stretch })).toBe('⏱ 45m in')
+    expect(statusLine({ patches: [], focus: 'Side quest', now: 45 * MIN, stretch })).toBe('🎯 Side quest')
+    expect(statusLine({ patches: PATCHES.slice(0, 1), focus: null, now: 45 * MIN, stretch })?.startsWith('🩹')).toBe(true)
   })
 })

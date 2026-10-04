@@ -1,9 +1,13 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
-import type { NextEvent, Patch } from '../types'
+import type { NextEvent, Patch, WorkStretch } from '../types'
+import { BREAK_MS } from './session-clock.ts'
 
 // #1 Patch status line: shows the in-progress ChaosPatch patch for this repo.
 // #7 Patch timer: with how long it has been in progress.
+// The one place the line is drawn: other modules write state, and a state.set hook here redraws.
+// That hook misses this file's own writes and writes made in a /patches button press, so refresh()
+// here and loadBoard() in patches-pane.tsx draw for themselves.
 // Built against Claude Code 2.1.289.
 
 export type { Patch }
@@ -15,6 +19,9 @@ const activePatches = atom({ plugin: 'codynd', key: 'activePatches' } as const, 
 const focus = atom({ plugin: 'codynd', key: 'focus' } as const, null)
 // next-event.ts caches it; the line ticks its minutes each redraw.
 const nextEvent = atom({ plugin: 'codynd', key: 'nextEvent' } as const, null)
+const workStretch = atom({ plugin: 'codynd', key: 'workStretch' } as const, null)
+// Changes to these redraw the line.
+const LINE_KEYS: readonly string[] = ['activePatches', 'focus', 'nextEvent', 'workStretch']
 
 export const DEFAULT_SERVER = 'claude.ai ChaosPatch'
 const REFRESH_MS = 5 * 60_000
@@ -76,17 +83,46 @@ export const eventSegment = (event: NextEvent | null, now: number): string | und
   return `${emoji} ${truncate(event.title, 30)} in ${formatElapsed(left + 59_999)}`
 }
 
-// The whole line: an in-progress patch wins, then the focus; the next event rides alongside either.
-export const statusLine = (patches: Patch[], focusLabel: string | null, now?: number, event: NextEvent | null = null): string | undefined => {
-  const work = formatStatus(patches, now) ?? (focusLabel === null ? undefined : `🎯 ${focusLabel}`)
+// "⏱ 45m in": the body-check clock's stretch. Hidden on a break, so it never counts up while Nae's away.
+export const stretchSegment = (stretch: WorkStretch | null, now: number): string | undefined =>
+  stretch === null || now - stretch.lastActive >= BREAK_MS ? undefined : `⏱ ${formatElapsed(Math.max(0, now - stretch.start))} in`
+
+export type LineParts = {
+  patches: Patch[]
+  focus: string | null
+  now?: number
+  event?: NextEvent | null
+  stretch?: WorkStretch | null
+}
+
+// The whole line: an in-progress patch wins, then the focus, then the work stretch; the next event
+// rides alongside whichever shows.
+export const statusLine = ({ patches, focus: label, now, event = null, stretch = null }: LineParts): string | undefined => {
+  const work =
+    formatStatus(patches, now) ?? (label !== null ? `🎯 ${label}` : now === undefined ? undefined : stretchSegment(stretch, now))
   const segments = [work, now === undefined ? undefined : eventSegment(event, now)].filter(s => s !== undefined)
   return segments.length === 0 ? undefined : segments.join(' │ ')
 }
 
+// A write being drawn: its own value wins over a read, since every read in one dispatch sees the
+// moment that dispatch began (a refresh started at session start would read the old value back).
+type Written = { key: string; value: unknown }
+
+const valueOr = <T,>(written: Written | undefined, key: string, readValue: () => Promise<T>): Promise<T> =>
+  written?.key === key ? Promise.resolve(written.value as T) : readValue()
+
 // Runs from timers: it catches its own errors, so a reload mid-draw leaves no unhandled rejection.
-const draw = async ($: EngineInterface): Promise<void> => {
+const draw = async ($: EngineInterface, written?: Written): Promise<void> => {
   try {
-    $.ui.status(statusLine(await read($, activePatches), await read($, focus), await $.clock.now(), await read($, nextEvent)))
+    $.ui.status(
+      statusLine({
+        patches: await valueOr(written, 'activePatches', () => read($, activePatches)),
+        focus: await valueOr(written, 'focus', () => read($, focus)),
+        now: await $.clock.now(),
+        event: await valueOr(written, 'nextEvent', () => read($, nextEvent)),
+        stretch: await valueOr(written, 'workStretch', () => read($, workStretch)),
+      }),
+    )
   } catch (err) {
     $.ui.log(`patch-status: draw failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
   }
@@ -103,14 +139,13 @@ const refresh = async ($: EngineInterface, server: string): Promise<void> => {
     const text = result.content.map(b => b.text ?? '').join('')
     const patches = patchesForCwd(parsePatches(text), cwd)
     await update($, activePatches, () => patches)
-    await draw($)
+    await draw($, { key: 'activePatches', value: patches })
   } catch (err) {
     $.ui.log(`patch-status: refresh failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
     await update($, activePatches, () => []).catch((e: unknown) =>
       $.ui.log(`patch-status: clearing failed: ${e instanceof Error ? e.message : String(e)}`, { to: 'debug' }),
     )
-    // No patches known: the focus (if any) still shows.
-    await draw($)
+    await draw($, { key: 'activePatches', value: [] })
   }
 }
 
@@ -122,6 +157,12 @@ export const registerPatchStatus = (on: On, options: PluginOptions): void => {
     void refresh($, server)
     $.clock.every(REFRESH_MS, () => void refresh($, server))
     $.clock.every(TICK_MS, () => void draw($))
+    return result
+  })
+
+  on('state.set', async ($, e, next) => {
+    const result = await next(e)
+    if (e.plugin === 'codynd' && LINE_KEYS.includes(e.key)) await draw($, { key: e.key, value: e.value })
     return result
   })
 

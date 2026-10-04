@@ -19,6 +19,7 @@ const activePatches = atom({ plugin: 'codynd', key: 'activePatches' } as const, 
 const focus = atom({ plugin: 'codynd', key: 'focus' } as const, null)
 const lastCelebration = atom({ plugin: 'codynd', key: 'lastCelebration' } as const, null)
 const nextEvent = atom({ plugin: 'codynd', key: 'nextEvent' } as const, null)
+const workStretch = atom({ plugin: 'codynd', key: 'workStretch' } as const, null)
 const lastTestFailed = atom({ plugin: 'codynd', key: 'lastTestFailed' } as const, null)
 
 // "claude.ai ChaosPatch" is listed to the model as mcp__claude_ai_ChaosPatch__<tool>.
@@ -53,9 +54,18 @@ const loadBoard = async ($: EngineInterface, server: string): Promise<void> => {
       listForRepo($, server, { status: 'open', sort_by: 'priority' }, cwd),
     ])
     await update($, board, () => ({ inProgress: toRows(inProgress), open: toRows(open).slice(0, MAX_OPEN) }))
-    // Keep the status line in step: it shares this list (see activePatches in patch-status.ts).
+    // Keep the status line in step: it shares this list. patch-status.ts's redraw hook misses writes
+    // made in a button press, so draw here with the list just written.
     await update($, activePatches, () => inProgress)
-    $.ui.status(statusLine(inProgress, await read($, focus), await $.clock.now(), await read($, nextEvent)))
+    $.ui.status(
+      statusLine({
+        patches: inProgress,
+        focus: await read($, focus),
+        now: await $.clock.now(),
+        event: await read($, nextEvent),
+        stretch: await read($, workStretch),
+      }),
+    )
   } catch (err) {
     $.ui.log(`patches: load failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
     await update($, board, () => ({ inProgress: [], open: [], error: "Couldn't reach ChaosPatch." })).catch((e: unknown) =>

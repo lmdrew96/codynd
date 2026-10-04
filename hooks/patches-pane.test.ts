@@ -141,7 +141,7 @@ describe('/patches', () => {
     for (let i = 0; i < 50; i++) await Promise.resolve()
     expect(seen.toasts).toContain('🎉 Patch done: #11 /patches')
     expect(seen.sounds).toEqual(['sounds/done.wav'])
-    expect(seen.statuses.at(-1)).toBeUndefined()
+    expect(seen.statuses.at(-1)).toBe('⏱ <1m in')
   })
 
   test('→ Cody closes the pane and queues the hand-off prompt', async ($, on) => {

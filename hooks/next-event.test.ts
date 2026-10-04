@@ -79,9 +79,9 @@ describe('helpers', () => {
   test('it rides alongside the patch or focus, never replacing them', () => {
     const latin = { id: 'a2', title: 'Latin', startsAt: LATIN, category: 'school' }
     const now = LATIN - 40 * MIN
-    expect(statusLine([], 'Side quest', now, latin)).toBe('🎯 Side quest │ 📚 Latin in 40m')
-    expect(statusLine([], null, now, latin)).toBe('📚 Latin in 40m')
-    expect(statusLine([], 'Side quest', now, null)).toBe('🎯 Side quest')
+    expect(statusLine({ patches: [], focus: 'Side quest', now, event: latin })).toBe('🎯 Side quest │ 📚 Latin in 40m')
+    expect(statusLine({ patches: [], focus: null, now, event: latin })).toBe('📚 Latin in 40m')
+    expect(statusLine({ patches: [], focus: 'Side quest', now, event: null })).toBe('🎯 Side quest')
     expect(landingToast(latin, 15)).toBe('🛬 Latin in 15m. Start landing the plane.')
   })
 })
@@ -128,9 +128,10 @@ describe('next-event countdown', () => {
     const seen = world(on, { text: CALENDAR, isError: false })
     await start($)
     expect(seen.calls[0]).toMatchObject({ include_planned: false })
-    expect(seen.statuses.at(-1)).toBe('📚 LATN 101 - Elementary Latin I in 40m')
+    expect(seen.statuses.at(-1)).toBe('⏱ <1m in │ 📚 LATN 101 - Elementary Latin I in 40m')
     await clock.advance(25 * MIN)
     await settle()
+    // 25 minutes without a prompt is a break, so the stretch has stepped aside.
     expect(seen.statuses.at(-1)).toBe('🟠 LATN 101 - Elementary Latin I in 15m')
     await clock.advance(5 * MIN)
     await settle()
@@ -141,7 +142,7 @@ describe('next-event countdown', () => {
     mock.clock(on, { now: LATIN - 40 * MIN })
     const seen = world(on, { text: 'down', isError: true })
     await start($)
-    expect(seen.statuses.filter(s => s !== undefined)).toEqual([])
+    expect(seen.statuses.every(s => s === undefined || s === '⏱ <1m in')).toBe(true)
     expect(seen.toasts).toEqual([])
   })
 })

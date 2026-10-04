@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import { KINDLING_SERVER, kindleArgs } from './park.ts'
-import { statusLine, truncate } from './patch-status.ts'
+import { truncate } from './patch-status.ts'
 
 // #12 Focus slot: Cody names the current non-patch work; the status line shows "🎯 <focus>" when no patch is active.
 // /topic is the manual override.
@@ -13,9 +13,8 @@ const SET_TOOL = /^mcp__codynd__set_focus$/
 const CLEAR_TOOL = /^mcp__codynd__clear_focus$/
 
 // The same state patch-status.ts and patches-pane.tsx read (atoms are declared per file).
+// Writing it redraws the status line (patch-status.ts's state.set hook).
 const focus = atom({ plugin: 'codynd', key: 'focus' } as const, null)
-const activePatches = atom({ plugin: 'codynd', key: 'activePatches' } as const, [])
-const nextEvent = atom({ plugin: 'codynd', key: 'nextEvent' } as const, null)
 const parkOffer = atom({ plugin: 'codynd', key: 'parkOffer' } as const, null)
 
 // Short and plain: one line, trimmed, capped at 40 characters.
@@ -31,7 +30,6 @@ export const offerFor = (old: string | null, label: string | null, offered: Read
 
 const setFocus = async ($: EngineInterface, label: string | null): Promise<void> => {
   await update($, focus, () => label)
-  $.ui.status(statusLine(await read($, activePatches), label, await $.clock.now(), await read($, nextEvent)))
 }
 
 // A focus change from Cody or /topic: set it, and quietly offer to park the one it replaced.
@@ -115,8 +113,7 @@ export const registerFocus = (on: On, options: PluginOptions): void => {
     return { text: label === null ? 'Focus cleared.' : `Focus: ${label}` }
   })
 
-  // /clear ends the session's context, so the focus goes with it. No session.start follows a
-  // /clear, so redraw the line here rather than waiting for one.
+  // /clear ends the session's context, so the focus goes with it (the line redraws on the write).
   on('session.end', async ($, e, next) => {
     await setFocus($, null)
     await dismissOffer($)

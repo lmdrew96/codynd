@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import type { NextEvent } from '../types'
-import { statusLine, truncate } from './patch-status.ts'
+import { truncate } from './patch-status.ts'
 
 // Next-event countdown: the next ControlledChaos event in the status line, so time stays visible
 // during hyperfocus. Visibility only: one heads-up toast at 15 minutes, never a repeat.
@@ -14,9 +14,6 @@ export const WINDOW_MS = 3 * 60 * 60_000
 export const SOON_MS = 15 * 60_000
 
 const nextEvent = atom({ plugin: 'codynd', key: 'nextEvent' } as const, null)
-// Read-only here, for redrawing the whole line.
-const activePatches = atom({ plugin: 'codynd', key: 'activePatches' } as const, [])
-const focus = atom({ plugin: 'codynd', key: 'focus' } as const, null)
 
 // cc_list_calendar prints times in Nae's timezone with its abbreviation; these are the US zones.
 const ZONE_OFFSET_H: Record<string, number> = {
@@ -58,15 +55,8 @@ export const parseNextEvent = (markdown: string, now: number): NextEvent | null 
 export const landingToast = (event: NextEvent, minutes: number): string =>
   `🛬 ${truncate(event.title, 40)} in ${minutes}m. Start landing the plane.`
 
-const draw = async ($: EngineInterface): Promise<void> => {
-  try {
-    $.ui.status(statusLine(await read($, activePatches), await read($, focus), await $.clock.now(), await read($, nextEvent)))
-  } catch (err) {
-    $.ui.log(`next-event: draw failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
-  }
-}
-
-// Unreachable or odd output: no segment, a debug log line, nothing on screen.
+// Unreachable or odd output: no segment, a debug log line, nothing on screen. Writing nextEvent
+// redraws the line (patch-status.ts's state.set hook).
 const refresh = async ($: EngineInterface, server: string): Promise<void> => {
   try {
     const now = await $.clock.now()
@@ -82,7 +72,6 @@ const refresh = async ($: EngineInterface, server: string): Promise<void> => {
     $.ui.log(`next-event: refresh failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
     await update($, nextEvent, () => null).catch(() => undefined)
   }
-  await draw($)
 }
 
 // One heads-up per event, the first tick it's within 15 minutes.

@@ -19,6 +19,9 @@ export type Celebration = { sound: number; opener: number }
 // The next timed ControlledChaos event within 3h, for the status-line countdown (startsAt in ms).
 export type NextEvent = { id: string; title: string; startsAt: number; category: string | null }
 
+// The session clock's current stretch of work (ms), for the always-on status line.
+export type WorkStretch = { start: number; lastActive: number }
+
 export type BoardRow = { id: string; title: string }
 
 // A /fried row: a low-energy patch from any project; isHere when it belongs to this repo.
@@ -49,6 +52,8 @@ declare module 'claude-code' {
       lastTestFailed: boolean | null
       // Cached every 5 minutes; the countdown ticks from it locally.
       nextEvent: NextEvent | null
+      // Written by session-clock.ts; null outside an interactive session.
+      workStretch: WorkStretch | null
     }
   }
 }
