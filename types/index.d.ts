@@ -22,6 +22,9 @@ export type NextEvent = { id: string; title: string; startsAt: number; category:
 // The session clock's current stretch of work (ms), for the always-on status line.
 export type WorkStretch = { start: number; lastActive: number }
 
+// Where this session began, for /whatchanged: HEAD and the files already untracked then.
+export type SessionStart = { head: string; untracked: string[] }
+
 export type BoardRow = { id: string; title: string }
 
 // A /fried row: a low-energy patch from any project; isHere when it belongs to this repo.
@@ -54,6 +57,8 @@ declare module 'claude-code' {
       nextEvent: NextEvent | null
       // Written by session-clock.ts; null outside an interactive session.
       workStretch: WorkStretch | null
+      // Written once at session start by whatchanged.ts; null outside a git repo with commits.
+      sessionStart: SessionStart | null
     }
   }
 }
