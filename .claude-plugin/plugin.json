@@ -1,6 +1,6 @@
 {
   "name": "codynd",
-  "version": "0.24.0",
+  "version": "0.26.0",
   "description": "ND-friendly mods for Claude Code: patch status line and friends.",
   "author": {
     "name": "Nae (ADHDesigns)",
@@ -19,6 +19,18 @@
       "type": "boolean",
       "title": "Done chime sound",
       "description": "Play a chime when a ChaosPatch patch is completed.",
+      "default": true
+    },
+    "soundtrackPlaylist": {
+      "type": "string",
+      "title": "Soundtrack playlist",
+      "description": "What /soundtrack plays when a patch starts: a spotify: URI or an open.spotify.com link.",
+      "default": "spotify:playlist:37i9dQZF1DWZeKCadgRdKQ"
+    },
+    "soundtrackFadeOnDone": {
+      "type": "boolean",
+      "title": "Soundtrack fade on done",
+      "description": "Fade out and pause the soundtrack's music when a patch is completed.",
       "default": true
     },
     "bodyCheckMinutes": {

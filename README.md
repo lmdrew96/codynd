@@ -10,6 +10,7 @@ Neurodivergent-friendly mods for Claude Code that keep your work visible and you
 | --- | --- |
 | **Patch status line** | Shows `🩹 <title> · 24m` under the prompt for the [ChaosPatch](https://chaospatch.adhdesigns.dev) patch in progress in *this* repo (`(+N)` if there are more). The time reads `<1m`, `24m`, `1h 10m`, then whole days (`3d`), redrawn once a minute. Patches from other projects stay quiet. With no patch or focus, the line shows your current work stretch instead (`⏱ 45m in`, the same clock as the body check), hidden while you're on a break, so it never counts up while you're away. |
 | **Done chime** | When a patch is completed, a 10-second toast (`🎉 Patch done: <title>`) and a short chime. Each session's first win gets the classic two-note chime; after that the sound and the toast's opener rotate (`✨ Shipped`, `🌱 One less thing`, …), never the same twice running, so the reward stays fresh. If the tree is fully committed and the session's latest test run (if any) passed, a second toast follows: `🟢 Clean stopping point. Safe to walk away.` Otherwise it stays silent; it never runs tests itself. Failed calls don't celebrate. Other CodyND toasts that arrive meanwhile wait their turn, so the win is never covered up. |
+| **Patch soundtrack** | `/soundtrack on` and starting a patch puts on focus music: Spotify's Deep Focus, or your own playlist in settings. If something's already playing, it's left alone. When the patch is done, music the soundtrack started fades out over about a second, under the chime, and pauses. Off until you turn it on, and it stays how you left it across sessions. Drives the Spotify app on macOS and never opens it; if Spotify isn't running, nothing happens. Works from `/patches` and `/fried` too. Headless runs never touch the music. |
 | **Error decoder** | When a build, typecheck, test or lint run fails, one toast says what broke in plain English: `🧩 TypeScript can't find \`clock\`, probably a missing import or a typo (in wins.ts:81).` Common failures (TypeScript errors, missing modules, failing tests, lint counts, syntax errors) are read straight from the output; anything else gets one quick Haiku sentence. The same error again within 5 minutes stays quiet, it waits behind a done toast, and commands like `grep` that just return non-zero never trigger it. |
 | **Instruction hooks** | Quiet reminders for Claude, never for you, so the rules in your instructions don't fade in a long session. Every conversation starts with the rules in `rules.md` (one file, plain text, edit it freely). The first file edit with no patch in progress and no focus set carries a note asking Claude to start the patch or set a focus. It comes back after a topic switch: the focus changes or clears, or a patch is completed. Completing a patch without a completion note gets a nudge to add one. None of it shows on your screen. |
 | **Focus slot** | When no patch is in progress, the status line shows `🎯 <focus>`: a short label for the non-patch work at hand. Claude sets it with its `set_focus` / `clear_focus` tools when the topic changes; `/topic <label>` sets it by hand, bare `/topic` asks Claude to name the current work and set it, and `/topic clear` clears it. A patch always wins the line; the focus clears when the session ends. When a focus is replaced by a new one, a small band offers to park the old one in Kindling (Park / Dismiss). It goes away with your next prompt, and each label is offered once a session. |
@@ -61,7 +62,7 @@ Pick one. Loading it two ways at once loads it twice.
 - **A Kindling MCP server** for `/park`.
 - **A ControlledChaos MCP server** for the next-event countdown.
 - **`/patch`, bare `/wrap`, and `/whatchanged` make one model call** per use: a fork of your session, on the session's model, mostly served from the prompt cache. The error decoder makes one small Haiku call per failed run. Every other mod runs without model calls.
-- **macOS for the sound.** The chime plays through `afplay`; elsewhere you get the toast only.
+- **macOS for the sound.** The chime plays through `afplay`; elsewhere you get the toast only. The soundtrack needs the Spotify desktop app; the first time, macOS asks to let Claude Code control Spotify.
 
 ## Settings
 
@@ -71,6 +72,8 @@ Change these in `/config` (they're stored under `pluginConfigs.codynd` in your s
 | --- | --- | --- |
 | `chaospatchServer` | `claude.ai ChaosPatch` | Your ChaosPatch MCP server's name, as `/mcp` lists it. |
 | `doneChimeSound` | `true` | Play the chime when a patch is completed. |
+| `soundtrackPlaylist` | Spotify's Deep Focus | What the soundtrack plays when a patch starts: a `spotify:` URI or an `open.spotify.com` link. |
+| `soundtrackFadeOnDone` | `true` | Fade out and pause the soundtrack's music when a patch is completed. |
 | `bodyCheckMinutes` | `90` | Minutes of continuous work before the body-check nudge. |
 | `kindlingServer` | `claude.ai Kindling` | Your Kindling MCP server's name, for `/park`. |
 | `controlledChaosServer` | `claude.ai ControlledChaos` | Your ControlledChaos MCP server's name, for the next-event countdown. |
@@ -90,6 +93,7 @@ Change these in `/config` (they're stored under `pluginConfigs.codynd` in your s
 | `/wins-week` | This week's closed patches across every project, since Monday 00:00 local. |
 | `/whatchanged [patch]` | This session's changes in plain language, with files and a heads-up. |
 | `/park <thought>` | Park a side-thought in Kindling. |
+| `/soundtrack [on \| off]` | Turn the patch soundtrack on or off; alone, say which it is. |
 | `/snooze [minutes]` | Push the next body-check nudge out (default 30 minutes). |
 
 ## Development
@@ -113,6 +117,7 @@ hooks/patch-status.ts        status line and patch timer
 hooks/focus.tsx              focus slot (set_focus / clear_focus tools, /topic, park offer)
 hooks/toast-queue.ts         holds toasts behind a done toast
 hooks/done-chime.ts          done chime
+hooks/soundtrack.ts          patch soundtrack, /soundtrack
 hooks/error-decoder.ts       error decoder toast
 hooks/session-clock.ts       session clock and /snooze
 hooks/reentry-card.tsx       re-entry card, /recap

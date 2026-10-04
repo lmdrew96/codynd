@@ -53,6 +53,8 @@ declare module 'claude-code' {
       lastCelebration: Celebration | null
       // Whether the session's latest test command failed; null until one runs (for the stopping point).
       lastTestFailed: boolean | null
+      // Whether the soundtrack started the music now playing, so Done fades only music it began.
+      soundtrackStarted: boolean
       // Cached every 5 minutes; the countdown ticks from it locally.
       nextEvent: NextEvent | null
       // Written by session-clock.ts; null outside an interactive session.

@@ -3,6 +3,7 @@ import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import type { Board, BoardRow, FriedRow } from '../types'
 import { CHIMES, DONE_TOAST_MS, STOP_TOAST, doneMessage, isCleanStop, nextCelebration } from './done-chime.ts'
 import { DEFAULT_SERVER, parsePatches, patchesForCwd, statusLine, type Patch } from './patch-status.ts'
+import { FADE_SCRIPT, SOUNDTRACK_KEY, START_SCRIPT, playlistUri } from './soundtrack.ts'
 
 // #11 /patches: this repo's ChaosPatch board in a pane, driven by buttons, no model turn.
 // /fried: the same pane idea for tired evenings, low-energy open patches across projects.
@@ -21,6 +22,10 @@ const lastCelebration = atom({ plugin: 'codynd', key: 'lastCelebration' } as con
 const nextEvent = atom({ plugin: 'codynd', key: 'nextEvent' } as const, null)
 const workStretch = atom({ plugin: 'codynd', key: 'workStretch' } as const, null)
 const lastTestFailed = atom({ plugin: 'codynd', key: 'lastTestFailed' } as const, null)
+const soundtrackStarted = atom({ plugin: 'codynd', key: 'soundtrackStarted' } as const, false)
+
+// The chime, and the soundtrack's playlist and fade (soundtrack.ts), from the settings.
+type Sound = { chime: boolean; playlist: string; fadeOnDone: boolean }
 
 // "claude.ai ChaosPatch" is listed to the model as mcp__claude_ai_ChaosPatch__<tool>.
 export const mcpToolName = (server: string, tool: string): string =>
@@ -116,6 +121,34 @@ const playChime = async ($: EngineInterface, chime: string): Promise<void> => {
   }
 }
 
+// The soundtrack, run here too: the pane's own $.tool.call skips soundtrack.ts's hooks.
+// osascript's answer; undefined when it couldn't run at all.
+const spotify = async ($: EngineInterface, script: string, args: string[]): Promise<string | undefined> => {
+  try {
+    const ran = await $.process.run(['osascript', '-e', script, ...args])
+    if (ran.exitCode !== 0) throw new Error(ran.stderr.trim() || `exit ${ran.exitCode}`)
+    return ran.stdout.trim()
+  } catch (err) {
+    $.ui.log(`patches: spotify unreachable: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
+    return undefined
+  }
+}
+
+const soundtrackMusic = async ($: EngineInterface, tool: string, sound: Sound): Promise<void> => {
+  try {
+    if ((await $.store.get(SOUNDTRACK_KEY)) !== true) return
+    if (tool === 'cp_start_patch') {
+      const answer = await spotify($, START_SCRIPT, [sound.playlist])
+      await update($, soundtrackStarted, () => answer === 'started')
+    } else if (tool === 'cp_complete_patch' && sound.fadeOnDone && (await read($, soundtrackStarted))) {
+      await update($, soundtrackStarted, () => false)
+      await spotify($, FADE_SCRIPT, [])
+    }
+  } catch (err) {
+    $.ui.log(`patches: soundtrack failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
+  }
+}
+
 type LooseResult = { deny?: string; isError?: boolean }
 
 // Through $.tool.call with consent, so the permission path reads the press as Nae's request.
@@ -125,7 +158,7 @@ const changePatch = async (
   tool: string,
   row: BoardRow,
   label: string,
-  withSound: boolean,
+  sound: Sound,
 ): Promise<void> => {
   // Loosely typed: tsc gives up expanding every connected MCP tool's input types here (TS2589).
   const ran = await ($.tool.call as unknown as (input: Record<string, unknown> & { tool: string }) => Promise<LooseResult>)({
@@ -134,14 +167,18 @@ const changePatch = async (
     consent: `Nae pressed "${label}" on "${row.title}" in /patches`,
   })
   if (ran.deny !== undefined || ran.isError === true) $.ui.toast(`Couldn't ${label.toLowerCase()} that patch.`)
-  // Awaited, sound aside: toasts raised after the press settles skip this plugin's own toast queue.
-  else if (tool === 'cp_complete_patch') await celebrate($, row.title, withSound)
+  else {
+    // Detached, so the board never waits on Spotify; a fade runs under the chime.
+    void soundtrackMusic($, tool, sound)
+    // Awaited, sound aside: toasts raised after the press settles skip this plugin's own toast queue.
+    if (tool === 'cp_complete_patch') await celebrate($, row.title, sound.chime)
+  }
   await loadBoard($, server)
 }
 
 // Start from /fried: the same call as /patches' Start, then this list reloads too.
-const startFried = async ($: EngineInterface, server: string, row: BoardRow, withSound: boolean): Promise<void> => {
-  await changePatch($, server, 'cp_start_patch', row, 'Start', withSound)
+const startFried = async ($: EngineInterface, server: string, row: BoardRow, sound: Sound): Promise<void> => {
+  await changePatch($, server, 'cp_start_patch', row, 'Start', sound)
   await loadFried($, server)
 }
 
@@ -153,7 +190,11 @@ const handToCody = async ($: EngineInterface, row: BoardRow, pane: string): Prom
 
 export const registerPatchesPane = (on: On, options: PluginOptions): void => {
   const server = typeof options.chaospatchServer === 'string' ? options.chaospatchServer : DEFAULT_SERVER
-  const withSound = options.doneChimeSound !== false
+  const sound: Sound = {
+    chime: options.doneChimeSound !== false,
+    playlist: playlistUri(options.soundtrackPlaylist),
+    fadeOnDone: options.soundtrackFadeOnDone !== false,
+  }
 
   on('session.start', { isInteractive: true }, async ($, e, next) => {
     const result = await next(e)
@@ -196,7 +237,7 @@ export const registerPatchesPane = (on: On, options: PluginOptions): void => {
                   {row.title} <Text dimColor>· {row.project}</Text>
                 </Text>
               </Box>
-              <Button key={`fstart-${row.id}`} onPress={() => startFried($, server, row, withSound)}>
+              <Button key={`fstart-${row.id}`} onPress={() => startFried($, server, row, sound)}>
                 Start
               </Button>
               {row.isHere && (
@@ -228,7 +269,7 @@ export const registerPatchesPane = (on: On, options: PluginOptions): void => {
             <Box flexGrow={1} flexShrink={1}>
               <Text wrap="truncate-end">🩹 {row.title}</Text>
             </Box>
-            <Button key={`done-${row.id}`} onPress={() => changePatch($, server, 'cp_complete_patch', row, 'Done', withSound)}>
+            <Button key={`done-${row.id}`} onPress={() => changePatch($, server, 'cp_complete_patch', row, 'Done', sound)}>
               Done
             </Button>
           </Box>
@@ -240,7 +281,7 @@ export const registerPatchesPane = (on: On, options: PluginOptions): void => {
             <Box flexGrow={1} flexShrink={1}>
               <Text wrap="truncate-end">{row.title}</Text>
             </Box>
-            <Button key={`start-${row.id}`} onPress={() => changePatch($, server, 'cp_start_patch', row, 'Start', withSound)}>
+            <Button key={`start-${row.id}`} onPress={() => changePatch($, server, 'cp_start_patch', row, 'Start', sound)}>
               Start
             </Button>
             <Button key={`cody-${row.id}`} hotkey={String(i + 1)} variant="primary" onPress={() => handToCody($, row, PANE)}>

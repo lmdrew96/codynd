@@ -10,6 +10,7 @@ import { registerPatchesPane } from './patches-pane.tsx'
 import { registerQuickPatch } from './quick-patch.ts'
 import { registerReentryCard } from './reentry-card.tsx'
 import { registerSessionClock } from './session-clock.ts'
+import { registerSoundtrack } from './soundtrack.ts'
 import { registerToastQueue } from './toast-queue.ts'
 import { registerWhatChanged } from './whatchanged.ts'
 import { registerWins } from './wins.ts'
@@ -18,6 +19,7 @@ import { registerWrap } from './wrap.ts'
 export const register: Register = (on, options) => {
   registerPatchStatus(on, options)
   registerDoneChime(on, options)
+  registerSoundtrack(on, options)
   registerErrorDecoder(on)
   registerSessionClock(on, options)
   registerReentryCard(on, options)
