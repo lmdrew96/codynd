@@ -17,7 +17,10 @@ describe('helpers', () => {
     expect(accountNote('Wired the card.\n\n```ts\nx\n```\nNext: tests.', '🎯 Card')).toBe('🎯 Card: Wired the card. Next: tests.')
     expect(accountNote('Did things.', null)).toBe('Did things.')
     expect(accountNote('  ', '🎯 Card')).toBeNull()
-    expect(accountNote('word '.repeat(200), null)?.length).toBe(420)
+    expect(accountNote('word '.repeat(200), null)?.length).toBe(600)
+    // A long label doesn't eat into the account.
+    const long = `🩹 ${'t'.repeat(80)}`
+    expect(accountNote('word '.repeat(200), long)?.length).toBe(long.length + 2 + 600)
   })
 
   test('uncommitted files are counted, never warned about', () => {

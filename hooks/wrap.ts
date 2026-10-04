@@ -9,8 +9,9 @@ import { truncate } from './patch-status.ts'
 export type LeftOff = { note: string; savedAt: number }
 
 const MAX_NOTE = 200
-// Room for the ~50-word account bare /wrap writes, plus its patch/focus label.
-const MAX_ACCOUNT = 420
+// A runaway guard, not a target: "about 50 words" runs to ~70 (~450 chars). The patch/focus
+// label rides on top, so a long patch title never eats the account's "Next:".
+const MAX_ACCOUNT = 600
 // Read-only here: the same state the status line and focus slot use.
 const activePatches = atom({ plugin: 'codynd', key: 'activePatches' } as const, [])
 const focus = atom({ plugin: 'codynd', key: 'focus' } as const, null)
@@ -37,7 +38,8 @@ export const accountPrompt = (label: string | null): string =>
 export const accountNote = (reply: string, label: string | null): string | null => {
   const text = reply.replace(/```[\s\S]*?```/g, '').replace(/\s+/g, ' ').trim()
   if (text === '') return null
-  return truncate(label === null ? text : `${label}: ${text}`, MAX_ACCOUNT)
+  const body = truncate(text, MAX_ACCOUNT)
+  return label === null ? body : `${label}: ${body}`
 }
 
 // A fresh session has nothing to account for, so a failed or empty fork leaves just the label.
