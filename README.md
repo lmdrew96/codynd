@@ -9,7 +9,8 @@ Neurodivergent-friendly mods for Claude Code that keep your work visible and you
 | Mod | What it does |
 | --- | --- |
 | **Patch status line** | Shows `🩹 <title> · 24m` under the prompt for the [ChaosPatch](https://chaospatch.adhdesigns.dev) patch in progress in *this* repo (`(+N)` if there are more). The time reads `<1m`, `24m`, `1h 10m`, then whole days (`3d`), redrawn once a minute. Patches from other projects stay quiet. |
-| **Done chime** | When a patch is completed, a 10-second toast (`🎉 Patch done: <title>`) and a short two-note chime. Failed calls don't celebrate. |
+| **Done chime** | When a patch is completed, a 10-second toast (`🎉 Patch done: <title>`) and a short two-note chime. Failed calls don't celebrate. Other CodyND toasts that arrive meanwhile wait their turn, so the win is never covered up. |
+| **Focus slot** | When no patch is in progress, the status line shows `🎯 <focus>`: a short label for the non-patch work at hand. Claude sets it with its `set_focus` / `clear_focus` tools when the topic changes; `/focus <label>` sets it by hand. A patch always wins the line; the focus clears when the session ends. |
 | **Session clock** | After 90 minutes of continuous prompting: `🫖 1h 30m in — water? food? stretch?`. One toast per stretch, gone after 15 seconds. 20 minutes without a prompt counts as a break and resets the clock. `/snooze [minutes]` pushes it out (default 30). |
 | **Re-entry card** | A band above the prompt when a session opens: your last commit ("Last time") and the patch in progress, or the top open one ("Up next"). Disappears on Dismiss or your first prompt. |
 | **`/park`** | `/park <thought>` saves a side-thought to [Kindling](https://kindling.adhdesigns.dev), tagged `parked` and `project:<repo>`, and confirms with a toast. Tangents get caught, not policed. It runs the moment you hit Enter, even while Claude is mid-turn. If it can't save, the thought is echoed back so it isn't lost. |
@@ -71,6 +72,7 @@ Change these in `/config` (they're stored under `pluginConfigs.codynd` in your s
 | Command | What it does |
 | --- | --- |
 | `/patches` | Open this repo's ChaosPatch board. |
+| `/focus [label]` | Set the status-line focus by hand, or clear it with no label. |
 | `/patch <idea>` | Draft and file a patch for this repo from a rough idea. |
 | `/wins` | Today's closed patches and commits in this repo. |
 | `/wins-all` | Today's closed patches across every project. |
@@ -94,6 +96,8 @@ Claude Code writes the API's type declarations into `.claude-plugin/types/` when
 .claude-plugin/plugin.json   manifest and settings (userConfig)
 hooks/register.ts            wires the mods together
 hooks/patch-status.ts        status line and patch timer
+hooks/focus.ts               focus slot (set_focus / clear_focus tools, /focus)
+hooks/toast-queue.ts         holds toasts behind a done toast
 hooks/done-chime.ts          done chime
 hooks/session-clock.ts       session clock and /snooze
 hooks/reentry-card.tsx       re-entry card
@@ -102,7 +106,7 @@ hooks/patches-pane.tsx       /patches board
 hooks/quick-patch.ts         /patch
 hooks/wins.ts                /wins and /wins-all
 hooks/*.test.ts              tests (claude plugin test)
-types/index.d.ts             $.state contract (card, board, active patches)
+types/index.d.ts             $.state contract (card, board, active patches, focus)
 sounds/done.wav              the chime (an original synthesized clip)
 ```
 
