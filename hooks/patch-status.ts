@@ -10,7 +10,7 @@ export type Patch = {
   started_at: string | null
 }
 
-const DEFAULT_SERVER = 'claude.ai ChaosPatch'
+export const DEFAULT_SERVER = 'claude.ai ChaosPatch'
 const REFRESH_MS = 5 * 60_000
 const MAX_TITLE = 60
 // Any ChaosPatch call that can change which patch is in progress.
