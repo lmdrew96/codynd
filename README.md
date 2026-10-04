@@ -12,7 +12,8 @@ Neurodivergent-friendly mods for Claude Code that keep your work visible and you
 | **Done chime** | When a patch is completed, a 10-second toast (`🎉 Patch done: <title>`) and a short two-note chime. Failed calls don't celebrate. Other CodyND toasts that arrive meanwhile wait their turn, so the win is never covered up. |
 | **Focus slot** | When no patch is in progress, the status line shows `🎯 <focus>`: a short label for the non-patch work at hand. Claude sets it with its `set_focus` / `clear_focus` tools when the topic changes; `/topic <label>` sets it by hand. A patch always wins the line; the focus clears when the session ends. |
 | **Session clock** | After 90 minutes of continuous prompting: `🫖 1h 30m in — water? food? stretch?`. One toast per stretch, gone after 15 seconds. 20 minutes without a prompt counts as a break and resets the clock. `/snooze [minutes]` pushes it out (default 30). |
-| **Re-entry card** | A band above the prompt when a session opens: your last commit ("Last time") and the patch in progress, or the top open one ("Up next"). Disappears on Dismiss or your first prompt. |
+| **Re-entry card** | A band above the prompt when a session opens: your `/wrap` note ("Left off"), your last commit ("Last time") and the patch in progress, or the top open one ("Up next"). Disappears on Dismiss or your first prompt. |
+| **`/wrap`** | `/wrap <note>` leaves a where-I-left-off note for this repo; the next session's re-entry card shows it (`Left off: <note> · 2h ago`). Bare `/wrap` saves the current patch or focus. Also mentions uncommitted files, as information only. One note per repo, kept on this machine. |
 | **`/park`** | `/park <thought>` saves a side-thought to [Kindling](https://kindling.adhdesigns.dev), tagged `parked` and `project:<repo>`, and confirms with a toast. Tangents get caught, not policed. It runs the moment you hit Enter, even while Claude is mid-turn. If it can't save, the thought is echoed back so it isn't lost. |
 | **`/patch`** | `/patch <rough idea>` turns an "oh, we should also…" into a real ChaosPatch patch for this repo: a title, a one-line summary and acceptance criteria, drafted from the session so it knows what you're working on. Runs mid-turn without interrupting. Tagged `quick-capture`; your exact words are kept in the patch's spec, and if drafting fails your raw words are filed, tagged `rough`. |
 | **`/wins`** | Today's wins in this repo: patches closed and commits made since local midnight. `/wins-all` shows closed patches across every project. An empty day gets a gentle line, never a guilt trip. |
@@ -73,6 +74,7 @@ Change these in `/config` (they're stored under `pluginConfigs.codynd` in your s
 | --- | --- |
 | `/patches` | Open this repo's ChaosPatch board. |
 | `/topic [label]` | Set the status-line focus by hand, or clear it with no label. |
+| `/wrap [note]` | Leave a where-I-left-off note for next session. |
 | `/patch <idea>` | Draft and file a patch for this repo from a rough idea. |
 | `/wins` | Today's closed patches and commits in this repo. |
 | `/wins-all` | Today's closed patches across every project. |
@@ -105,6 +107,7 @@ hooks/park.ts                /park
 hooks/patches-pane.tsx       /patches board
 hooks/quick-patch.ts         /patch
 hooks/wins.ts                /wins and /wins-all
+hooks/wrap.ts                /wrap
 hooks/*.test.ts              tests (claude plugin test)
 types/index.d.ts             $.state contract (card, board, active patches, focus)
 sounds/done.wav              the chime (an original synthesized clip)
