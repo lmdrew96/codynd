@@ -1,6 +1,6 @@
 import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { formatStatus, normalize, patchesForCwd, type Patch } from './patch-status.ts'
+import { formatElapsed, formatStatus, normalize, patchesForCwd, type Patch } from './patch-status.ts'
 
 const patch = (title: string, project_slug: string, project_name: string, started_at: string): Patch => ({
   title,
@@ -37,6 +37,21 @@ describe('helpers', () => {
     expect(long?.replace('🩹 ', '').length).toBe(60)
     expect(long?.endsWith('…')).toBe(true)
   })
+
+  test('elapsed time reads calmly, whole days past 24h', () => {
+    const MIN = 60_000
+    expect(formatElapsed(30_000)).toBe('<1m')
+    expect(formatElapsed(24 * MIN)).toBe('24m')
+    expect(formatElapsed(60 * MIN)).toBe('1h')
+    expect(formatElapsed(70 * MIN)).toBe('1h 10m')
+    expect(formatElapsed(74 * 60 * MIN)).toBe('3d')
+  })
+
+  test('status adds elapsed time before the count', () => {
+    const started = Date.parse('2026-10-04T02:07:31Z')
+    const both = patchesForCwd([patch('older', 'codynd', 'CodyND', '2026-10-01T00:00:00Z'), ...PATCHES], CWD)
+    expect(formatStatus(both, started + 24 * 60_000)).toBe('🩹 #1 Patch status line · 24m (+1)')
+  })
 })
 
 // Answers the engine nouns the mod reads, and records what it puts on the status line.
@@ -63,12 +78,15 @@ const startSession = async ($: Engine): Promise<void> => {
 }
 
 describe('status line', () => {
-  test('shows the patch in progress for this repo on session start', async ($, on) => {
+  test('shows the patch in progress for this repo on session start, then ticks', async ($, on) => {
     const clock = mock.clock(on)
+    await clock.set(Date.parse('2026-10-04T02:07:31Z') + 5 * 60_000)
     const statuses = world(on, () => ({ text: JSON.stringify(PATCHES), isError: false }))
     await startSession($)
     await clock.advance(10)
-    expect(statuses.at(-1)).toBe('🩹 #1 Patch status line')
+    expect(statuses.at(-1)).toBe('🩹 #1 Patch status line · 5m')
+    await clock.advance(60_000)
+    expect(statuses.at(-1)).toBe('🩹 #1 Patch status line · 6m')
   })
 
   test('clears quietly when ChaosPatch errors', async ($, on) => {

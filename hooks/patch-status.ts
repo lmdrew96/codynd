@@ -1,6 +1,7 @@
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 
 // #1 Patch status line: shows the in-progress ChaosPatch patch for this repo.
+// #7 Patch timer: with how long it has been in progress.
 // Built against Claude Code 2.1.289.
 
 export type Patch = {
@@ -12,6 +13,8 @@ export type Patch = {
 
 export const DEFAULT_SERVER = 'claude.ai ChaosPatch'
 const REFRESH_MS = 5 * 60_000
+// Elapsed time redraws from the cached patches; no ChaosPatch call.
+const TICK_MS = 60_000
 const MAX_TITLE = 60
 // Any ChaosPatch call that can change which patch is in progress.
 const PATCH_WRITE_TOOL = /__cp_(start_patch|complete_patch|update_patch|reopen_patch|delete_patch|batch_update)$/
@@ -35,15 +38,33 @@ export const patchesForCwd = (patches: Patch[], cwd: string): Patch[] => {
 
 export const truncate = (s: string, max = MAX_TITLE): string => (s.length > max ? `${s.slice(0, max - 1)}…` : s)
 
-export const formatStatus = (patches: Patch[]): string | undefined => {
+// Informational, never alarming: past a day it's whole days ("3d"), not "74h 12m".
+export const formatElapsed = (ms: number): string => {
+  const minutes = Math.floor(ms / 60_000)
+  if (minutes < 1) return '<1m'
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return minutes % 60 === 0 ? `${hours}h` : `${hours}h ${minutes % 60}m`
+  return `${Math.floor(hours / 24)}d`
+}
+
+export const formatStatus = (patches: Patch[], now?: number): string | undefined => {
   const [newest, ...rest] = patches
   if (newest === undefined) return undefined
-  const title = truncate(newest.title)
-  return rest.length > 0 ? `🩹 ${title} (+${rest.length})` : `🩹 ${title}`
+  const startedAt = newest.started_at === null ? NaN : Date.parse(newest.started_at)
+  const elapsed = now === undefined || Number.isNaN(startedAt) ? '' : ` · ${formatElapsed(Math.max(0, now - startedAt))}`
+  const more = rest.length > 0 ? ` (+${rest.length})` : ''
+  return `🩹 ${truncate(newest.title)}${elapsed}${more}`
 }
 
 // Unreachable server or bad response: clear the line, note it in the debug log only.
-const refresh = async ($: EngineInterface, server: string): Promise<void> => {
+type Box = { patches: Patch[] }
+
+const draw = async ($: EngineInterface, box: Box): Promise<void> => {
+  $.ui.status(formatStatus(box.patches, await $.clock.now()))
+}
+
+const refresh = async ($: EngineInterface, server: string, box: Box): Promise<void> => {
   try {
     const [cwd, result] = await Promise.all([
       $.session.cwd(),
@@ -51,8 +72,10 @@ const refresh = async ($: EngineInterface, server: string): Promise<void> => {
     ])
     if (result.isError) throw new Error(result.content.map(b => b.text ?? '').join(' '))
     const text = result.content.map(b => b.text ?? '').join('')
-    $.ui.status(formatStatus(patchesForCwd(parsePatches(text), cwd)))
+    box.patches = patchesForCwd(parsePatches(text), cwd)
+    await draw($, box)
   } catch (err) {
+    box.patches = []
     $.ui.status(undefined)
     $.ui.log(`patch-status: refresh failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
   }
@@ -60,17 +83,19 @@ const refresh = async ($: EngineInterface, server: string): Promise<void> => {
 
 export const registerPatchStatus = (on: On, options: PluginOptions): void => {
   const server = typeof options.chaospatchServer === 'string' ? options.chaospatchServer : DEFAULT_SERVER
+  const box: Box = { patches: [] }
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
-    void refresh($, server)
-    $.clock.every(REFRESH_MS, () => void refresh($, server))
+    void refresh($, server, box)
+    $.clock.every(REFRESH_MS, () => void refresh($, server, box))
+    $.clock.every(TICK_MS, () => void draw($, box))
     return result
   })
 
   on('tool.call', { tool: PATCH_WRITE_TOOL }, async ($, e, next) => {
     const ran = await next(e)
-    void refresh($, server)
+    void refresh($, server, box)
     return ran
   })
 }
