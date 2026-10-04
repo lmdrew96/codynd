@@ -15,9 +15,10 @@ Neurodivergent-friendly mods for Claude Code that keep your work visible and you
 | **Re-entry card** | A band above the prompt when a session opens: your `/wrap` note ("Left off"), your last commit ("Last time") and the patch in progress, or the top open one ("Up next"). Disappears on Dismiss or your first prompt. `/recap` brings it back, freshly loaded, when you return to a window you left open. |
 | **`/wrap`** | `/wrap <note>` leaves a where-I-left-off note for this repo; the next session's re-entry card shows it (`Left off: <note> · 2h ago`). Bare `/wrap` saves the current patch or focus. Also mentions uncommitted files, as information only. One note per repo, kept on this machine. |
 | **`/park`** | `/park <thought>` saves a side-thought to [Kindling](https://kindling.adhdesigns.dev), tagged `parked` and `project:<repo>`, and confirms with a toast. Tangents get caught, not policed. It runs the moment you hit Enter, even while Claude is mid-turn. If it can't save, the thought is echoed back so it isn't lost. |
-| **`/patch`** | `/patch <rough idea>` turns an "oh, we should also…" into a real ChaosPatch patch for this repo: a title, a one-line summary and acceptance criteria, drafted from the session so it knows what you're working on. Runs mid-turn without interrupting. Tagged `quick-capture`; your exact words are kept in the patch's spec, and if drafting fails your raw words are filed, tagged `rough`. |
+| **`/patch`** | `/patch <rough idea>` turns an "oh, we should also…" into a real ChaosPatch patch for this repo: a title, a one-line summary and acceptance criteria, drafted from the session so it knows what you're working on. Runs mid-turn without interrupting. Tagged `quick-capture`, plus a guessed `energy:low`/`energy:med`/`energy:high` for `/fried`; your exact words are kept in the patch's spec, and if drafting fails your raw words are filed, tagged `rough`. |
 | **`/wins`** | Today's wins in this repo: patches closed and commits made since local midnight. `/wins-all` shows closed patches across every project. An empty day gets a gentle line, never a guilt trip. |
 | **`/patches`** | Opens this repo's ChaosPatch board in a pane: in-progress patches with **Done**, open ones by priority with **Start** and **→ Cody**, which hands the patch to Claude as a prompt (number keys press it). Done plays the chime. Esc closes. |
+| **`/fried`** | For tired evenings when your brain still wants a goal: a pane of open patches tagged `energy:low`, across every project, by priority. **Start** works on any of them; **→ Cody** shows on this repo's only. Nothing tiny queued? It says so, and suggests rest. |
 
 ## Install
 
@@ -52,7 +53,7 @@ Pick one. Loading it two ways at once loads it twice.
 ## Requirements
 
 - **Claude Code with mod support.** The mod API is early access and can change between releases. CodyND was built against **Claude Code 2.1.289**.
-- **A ChaosPatch MCP server** for the status line, the chime, `/patches`, `/patch`, `/wins`, and the card's "Up next" line. Without one those stay quietly empty; the session clock and the card's "Last time" line still work. A project matches a repo when its slug or name equals the repo's folder name, ignoring case and punctuation (`chicken-scratch` = `Chicken Scratch`).
+- **A ChaosPatch MCP server** for the status line, the chime, `/patches`, `/fried`, `/patch`, `/wins`, and the card's "Up next" line. Without one those stay quietly empty; the session clock and the card's "Last time" line still work. A project matches a repo when its slug or name equals the repo's folder name, ignoring case and punctuation (`chicken-scratch` = `Chicken Scratch`).
 - **A Kindling MCP server** for `/park`.
 - **`/patch` makes one model call** per use: a fork of your session, on the session's model, mostly served from the prompt cache. Every other mod runs without model calls.
 - **macOS for the sound.** The chime plays through `afplay`; elsewhere you get the toast only.
@@ -73,6 +74,7 @@ Change these in `/config` (they're stored under `pluginConfigs.codynd` in your s
 | Command | What it does |
 | --- | --- |
 | `/patches` | Open this repo's ChaosPatch board. |
+| `/fried` | Open only the low-energy patches, across projects. |
 | `/topic [label]` | Set the status-line focus by hand, or clear it with no label. |
 | `/wrap [note]` | Leave a where-I-left-off note for next session. |
 | `/recap` | Bring the re-entry card back up, freshly loaded. |
@@ -105,7 +107,7 @@ hooks/done-chime.ts          done chime
 hooks/session-clock.ts       session clock and /snooze
 hooks/reentry-card.tsx       re-entry card, /recap
 hooks/park.ts                /park
-hooks/patches-pane.tsx       /patches board
+hooks/patches-pane.tsx       /patches board, /fried
 hooks/quick-patch.ts         /patch
 hooks/wins.ts                /wins and /wins-all
 hooks/wrap.ts                /wrap

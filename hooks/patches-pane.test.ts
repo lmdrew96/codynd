@@ -1,6 +1,6 @@
 import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 import type { On, RenderElement } from 'claude-code'
-import { handoffPrompt, mcpToolName, toRows } from './patches-pane.tsx'
+import { FRIED_EMPTY, handoffPrompt, mcpToolName, toFriedRows, toRows } from './patches-pane.tsx'
 
 const CWD = '/x/codynd'
 const row = (id: string, title: string, started_at: string | null = null) => ({
@@ -24,6 +24,14 @@ describe('helpers', () => {
   test('hand-off prompt names the patch and its id', () => {
     expect(handoffPrompt({ id: 'a1', title: '#9 /wins' })).toBe('Start ChaosPatch patch "#9 /wins" (id a1).')
   })
+
+  test('/fried rows carry their project and whether they belong here', () => {
+    const elsewhere = { ...row('s1', 'Fix footer copy'), project_slug: 'scribecat', project_name: 'ScribeCat' }
+    expect(toFriedRows([row('a', 'Tidy README'), elsewhere], CWD)).toEqual([
+      { id: 'a', title: 'Tidy README', project: 'CodyND', isHere: true },
+      { id: 's1', title: 'Fix footer copy', project: 'ScribeCat', isHere: false },
+    ])
+  })
 })
 
 type Seen = {
@@ -36,7 +44,7 @@ type Seen = {
 }
 
 // ChaosPatch beneath the plugin: one patch in progress, two open; a Done moves #11 out.
-const world = (on: On): Seen => {
+const world = (on: On, fried: unknown[] = []): Seen => {
   const seen: Seen = { toolCalls: [], prompts: [], closed: [], toasts: [], sounds: [], statuses: [] }
   let inProgress = [row('p11', '#11 /patches', '2026-10-04T03:00:00Z')]
   const open = [row('p9', '#9 /wins'), row('p10', '#10 /wrap')]
@@ -45,7 +53,8 @@ const world = (on: On): Seen => {
   on('session.cwd', () => ({ value: CWD }))
   on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
   on('mcp.call', (_$, e) => {
-    const patches = e.args.status === 'in_progress' ? inProgress : open
+    const tags = e.args.tags
+    const patches = Array.isArray(tags) && tags.includes('energy:low') ? fried : e.args.status === 'in_progress' ? inProgress : open
     return { value: { content: [{ type: 'text', text: JSON.stringify(patches) }], isError: false } }
   })
   on('tool.call', (_$, e) => {
@@ -84,10 +93,10 @@ const world = (on: On): Seen => {
   return seen
 }
 
-const openBoard = async ($: Engine) => {
+const openBoard = async ($: Engine, command = 'patches') => {
   await $.session.start({ cwd: CWD, surface: 'terminal', isInteractive: true })
   await $.command.run({
-    command: 'patches',
+    command,
     args: '',
     origin: { kind: 'composer' },
     presentation: { isFullscreen: false, columns: 80 },
@@ -98,7 +107,7 @@ const openBoard = async ($: Engine) => {
     plugin: 'codynd',
     surface: 'terminal',
     component: 'Pane',
-    requestId: 'codynd-patches',
+    requestId: command === 'fried' ? 'codynd-fried' : 'codynd-patches',
     props: {
       title: 'Patches',
       isFocused: true,
@@ -141,5 +150,33 @@ describe('/patches', () => {
     await ui.press({ key: 'cody-p9' })
     expect(seen.closed).toEqual(['codynd-patches'])
     expect(seen.prompts).toEqual(['Start ChaosPatch patch "#9 /wins" (id p9).'])
+  })
+})
+
+describe('/fried', () => {
+  const tiny = [row('t1', 'Tidy README'), { ...row('s1', 'Fix footer copy'), project_slug: 'scribecat', project_name: 'ScribeCat' }]
+
+  test('lists low-energy patches across projects; → Cody only for this repo', async ($, on) => {
+    const seen = world(on, tiny)
+    const ui = await openBoard($, 'fried')
+    expect(await ui.find({ type: 'Text', text: /Fix footer copy · ScribeCat/ })).toBeDefined()
+    expect(await ui.find({ type: 'Button', key: 'fcody-t1' })).toBeDefined()
+    expect(await ui.find({ type: 'Button', key: 'fcody-s1' })).toBeUndefined()
+    await ui.press({ key: 'fcody-t1' })
+    expect(seen.closed).toEqual(['codynd-fried'])
+    expect(seen.prompts).toEqual(['Start ChaosPatch patch "Tidy README" (id t1).'])
+  })
+
+  test('Start works on any project', async ($, on) => {
+    const seen = world(on, tiny)
+    const ui = await openBoard($, 'fried')
+    await ui.press({ key: 'fstart-s1' })
+    expect(seen.toolCalls[0]).toMatchObject({ tool: 'mcp__claude_ai_ChaosPatch__cp_start_patch', patch_id: 's1' })
+  })
+
+  test('nothing tiny queued: a friendly nudge to rest', async ($, on) => {
+    world(on)
+    const ui = await openBoard($, 'fried')
+    expect(await ui.find({ type: 'Text', text: FRIED_EMPTY })).toBeDefined()
   })
 })

@@ -5,18 +5,22 @@ import { DEFAULT_SERVER, normalize, truncate } from './patch-status.ts'
 // Built against Claude Code 2.1.289.
 
 type Priority = 'low' | 'medium' | 'high'
-export type Draft = { title: string; summary: string; acceptance: string[]; priority: Priority }
+type Energy = 'low' | 'med' | 'high'
+export type Draft = { title: string; summary: string; acceptance: string[]; priority: Priority; energy?: Energy }
 type Project = { name: string; slug: string }
 
 const DRAFT_TIMEOUT_MS = 30_000
 const PRIORITIES: readonly string[] = ['low', 'medium', 'high']
+// Plain ChaosPatch tags (energy:low|med|high); /fried lists the low ones.
+const ENERGIES: readonly string[] = ['low', 'med', 'high']
 
 export const draftPrompt = (rough: string): string =>
   [
     'Nae just typed a quick patch idea mid-session. Turn it into a ChaosPatch patch, using this session for context.',
     'Reply with ONLY a JSON object, no prose and no code fence:',
-    '{"title": string (under 80 chars), "summary": string (one line), "acceptance": string[] (2-4 short criteria), "priority": "low" | "medium" | "high"}',
+    '{"title": string (under 80 chars), "summary": string (one line), "acceptance": string[] (2-4 short criteria), "priority": "low" | "medium" | "high", "energy": "low" | "med" | "high"}',
     'Priority is "medium" unless her text clearly says otherwise. Stay true to what she wrote; don\'t add scope.',
+    'Energy is your guess at the focus it takes: "low" for a small copy, CSS, config or test tweak in one place; "high" for a new feature across files or an open design question; "med" otherwise.',
     '',
     `Her words: ${rough}`,
   ].join('\n')
@@ -31,7 +35,8 @@ export const parseDraft = (reply: string): Draft | undefined => {
     const acceptance = Array.isArray(d.acceptance) ? d.acceptance.filter((a): a is string => typeof a === 'string' && a.trim() !== '') : []
     if (typeof d.title !== 'string' || d.title.trim() === '' || typeof d.summary !== 'string') return undefined
     const priority = typeof d.priority === 'string' && PRIORITIES.includes(d.priority) ? (d.priority as Priority) : 'medium'
-    return { title: truncate(d.title.trim(), 100), summary: d.summary.trim(), acceptance, priority }
+    const energy = typeof d.energy === 'string' && ENERGIES.includes(d.energy) ? (d.energy as Energy) : undefined
+    return { title: truncate(d.title.trim(), 100), summary: d.summary.trim(), acceptance, priority, ...(energy === undefined ? {} : { energy }) }
   } catch {
     return undefined
   }
@@ -46,7 +51,7 @@ export const patchArgs = (projectSlug: string, rough: string, draft: Draft | und
         title: draft.title,
         notes: [draft.summary, ...(draft.acceptance.length > 0 ? ['AC:', ...draft.acceptance.map(a => `- ${a}`)] : [])].join('\n'),
         priority: draft.priority,
-        tags: ['quick-capture'],
+        tags: ['quick-capture', ...(draft.energy === undefined ? [] : [`energy:${draft.energy}`])],
         spec: `Nae's words: ${rough}`,
       }
 

@@ -18,6 +18,12 @@ export type Celebration = { sound: number; opener: number }
 
 export type BoardRow = { id: string; title: string }
 
+// A /fried row: a low-energy patch from any project; isHere when it belongs to this repo.
+export type FriedRow = BoardRow & { project: string; isHere: boolean }
+
+// /fried's pane, like Board: null while loading.
+export type FriedBoard = { rows: FriedRow[]; error?: string }
+
 // null while loading; `error` when ChaosPatch couldn't be reached.
 export type Board = { inProgress: BoardRow[]; open: BoardRow[]; error?: string }
 
@@ -27,6 +33,7 @@ declare module 'claude-code' {
       reentryCard: ReentryCard | null
       reentryHidden: boolean
       board: Board | null
+      friedBoard: FriedBoard | null
       // This repo's in-progress patches: the status line draws from it, /patches writes it too.
       activePatches: Patch[]
       // The non-patch work Cody named with set_focus (or Nae with /focus); shown when no patch is active.

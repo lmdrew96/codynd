@@ -21,6 +21,14 @@ describe('helpers', () => {
     expect(parseDraft('{"title": "T", "summary": "S", "acceptance": ["a"], "priority": "urgent"}')?.priority).toBe('medium')
   })
 
+  test('a guessed energy becomes an energy tag; an unknown one is dropped', () => {
+    const tiny = parseDraft('{"title": "T", "summary": "S", "acceptance": ["a"], "priority": "low", "energy": "low"}')
+    expect(patchArgs('codynd', 'fix copy', tiny).tags).toEqual(['quick-capture', 'energy:low'])
+    const odd = parseDraft('{"title": "T", "summary": "S", "acceptance": ["a"], "energy": "huge"}')
+    expect(odd?.energy).toBeUndefined()
+    expect(patchArgs('codynd', 'x', odd).tags).toEqual(['quick-capture'])
+  })
+
   test("Nae's words always ride along in spec", () => {
     const drafted = patchArgs('codynd', 'toasts fight', parseDraft(GOOD))
     expect(drafted).toMatchObject({ tags: ['quick-capture'], priority: 'low', spec: "Nae's words: toasts fight" })
