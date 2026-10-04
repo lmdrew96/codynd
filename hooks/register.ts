@@ -2,6 +2,7 @@ import type { Register } from 'claude-code'
 import { registerDoneChime } from './done-chime.ts'
 import { registerErrorDecoder } from './error-decoder.ts'
 import { registerFocus } from './focus.tsx'
+import { registerInstructions } from './instructions.ts'
 import { registerNextEvent } from './next-event.ts'
 import { registerPark } from './park.ts'
 import { registerPatchStatus } from './patch-status.ts'
@@ -29,4 +30,5 @@ export const register: Register = (on, options) => {
   registerWrap(on)
   registerWhatChanged(on)
   registerNextEvent(on, options)
+  registerInstructions(on)
 }

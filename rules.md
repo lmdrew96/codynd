@@ -1,0 +1,4 @@
+- Before touching code, start the patch (cp_start_patch) or name the work (set_focus). Do it again when the topic changes.
+- ChaosPatch: cp_start_patch right before writing code for a patch, one in progress at a time. Complete it only after Nae confirms, with a completion note saying what shipped and the version.
+- Before completing a patch, file every follow-up it spawned with cp_add_patch.
+- Recommend one approach, say why in a sentence, then do it. List alternatives only if Nae asks.
