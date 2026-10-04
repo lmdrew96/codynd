@@ -65,7 +65,12 @@ export const registerSessionClock = (on: On, options: PluginOptions): void => {
   on('session.start', { isInteractive: true }, async ($, e, next) => {
     const result = await next(e)
     box.streak = newStreak(await $.clock.now(), intervalMs)
-    await $.command.register({ name: 'snooze', description: 'Snooze the body-check nudge (minutes, default 30).' })
+    // Immediate: snoozing shouldn't wait for a long turn to finish.
+    await $.command.register({
+      name: 'snooze',
+      description: 'Snooze the body-check nudge (minutes, default 30).',
+      immediate: true,
+    })
     $.clock.every(CHECK_MS, () => void tick($, box, intervalMs))
     return result
   })

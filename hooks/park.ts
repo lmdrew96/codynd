@@ -39,7 +39,8 @@ export const registerPark = (on: On, options: PluginOptions): void => {
 
   on('session.start', { isInteractive: true }, async ($, e, next) => {
     const result = await next(e)
-    await $.command.register({ name: 'park', description: 'Park a side-thought in Kindling: /park <thought>' })
+    // Immediate: runs the moment it's typed, even mid-turn, so a parked thought never waits on Cody.
+    await $.command.register({ name: 'park', description: 'Park a side-thought in Kindling: /park <thought>', immediate: true })
     return result
   })
 

@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import type { Board, BoardRow } from '../types'
-import { CHIME, doneMessage } from './done-chime.ts'
+import { CHIME, DONE_TOAST_MS, doneMessage } from './done-chime.ts'
 import { DEFAULT_SERVER, formatStatus, parsePatches, patchesForCwd, type Patch } from './patch-status.ts'
 
 // #11 /patches: this repo's ChaosPatch board in a pane, driven by buttons, no model turn.
@@ -53,7 +53,7 @@ const loadBoard = async ($: EngineInterface, server: string): Promise<void> => {
 // The done chime, played here: a plugin's own $.tool.call skips its own tool.call hooks,
 // so done-chime.ts never sees a Done pressed in this pane.
 const celebrate = async ($: EngineInterface, title: string, withSound: boolean): Promise<void> => {
-  $.ui.toast(doneMessage(title))
+  $.ui.toast(doneMessage(title), { timeoutMs: DONE_TOAST_MS })
   if (!withSound) return
   try {
     await $.audio.play({ asset: CHIME })

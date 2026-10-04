@@ -6,6 +6,8 @@ import { truncate } from './patch-status.ts'
 
 const COMPLETE_TOOL = /__cp_complete_patch$/
 export const CHIME = 'sounds/done.wav'
+// Toasts can't be sticky (only a timeout), so the win stays up long enough to actually see.
+export const DONE_TOAST_MS = 10_000
 
 // cp_complete_patch answers with the patch as JSON; anything else gets the generic toast.
 export const patchTitle = (text: string | undefined): string | undefined => {
@@ -23,7 +25,7 @@ export const doneMessage = (title: string | undefined): string =>
   title === undefined ? '🎉 Patch done!' : `🎉 Patch done: ${truncate(title)}`
 
 const celebrate = async ($: EngineInterface, title: string | undefined, withSound: boolean): Promise<void> => {
-  $.ui.toast(doneMessage(title))
+  $.ui.toast(doneMessage(title), { timeoutMs: DONE_TOAST_MS })
   if (!withSound) return
   try {
     await $.audio.play({ asset: CHIME })
