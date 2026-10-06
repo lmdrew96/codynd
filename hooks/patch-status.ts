@@ -38,10 +38,21 @@ const PATCH_WRITE_TOOL = /__cp_(start_patch|complete_patch|request_review|update
 // "chicken-scratch", "Chicken Scratch" and "ChickenScratch" all become "chickenscratch".
 export const normalize = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 
+// Anything but JSON is an error the host put in place of the result (an oversized one, say); say what it was.
 export const parsePatches = (text: string): Patch[] => {
-  const parsed: unknown = JSON.parse(text)
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    throw new Error(truncate(text.trim() || 'an empty reply', 160))
+  }
   return Array.isArray(parsed) ? (parsed as Patch[]) : []
 }
+
+// Claude Code swaps an MCP result over ~25k tokens for an "Error: … exceeds maximum allowed tokens"
+// text. Every open patch across projects (80+ at ~280 tokens each) crossed it, so long lists come in
+// pages: 50 is about 14k tokens.
+export const PAGE_SIZE = 50
 
 // Normalized folder name → normalized project slug or name, for repos whose folder doesn't match.
 export type Aliases = Readonly<Record<string, string>>

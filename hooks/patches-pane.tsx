@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import type { Board, BoardRow, FriedRow } from '../types'
 import { CHIMES, DONE_TOAST_MS, STOP_TOAST, doneMessage, isCleanStop, nextCelebration } from './done-chime.ts'
-import { DEFAULT_SERVER, parseAliases, parsePatches, patchesForCwd, statusLine, type Aliases, type Patch } from './patch-status.ts'
+import { DEFAULT_SERVER, PAGE_SIZE, parseAliases, parsePatches, patchesForCwd, statusLine, type Aliases, type Patch } from './patch-status.ts'
 import { FADE_SCRIPT, SOUNDTRACK_KEY, START_SCRIPT, playlistUri } from './soundtrack.ts'
 
 // #11 /patches: this repo's ChaosPatch board in a pane, driven by buttons, no model turn.
@@ -54,9 +54,14 @@ const listForRepo = async (
   cwd: string,
   aliases: Aliases,
 ): Promise<Patch[]> => {
-  const result = await $.mcp.call(server, 'cp_list_all_patches', args)
-  if (result.isError) throw new Error(result.content.map(b => b.text ?? '').join(' '))
-  return patchesForCwd(parsePatches(result.content.map(b => b.text ?? '').join('')), cwd, aliases)
+  const patches: Patch[] = []
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const result = await $.mcp.call(server, 'cp_list_all_patches', { ...args, limit: PAGE_SIZE, offset })
+    if (result.isError) throw new Error(result.content.map(b => b.text ?? '').join(' '))
+    const page = parsePatches(result.content.map(b => b.text ?? '').join(''))
+    patches.push(...page)
+    if (page.length < PAGE_SIZE) return patchesForCwd(patches, cwd, aliases)
+  }
 }
 
 // The pane shows why, so a failure can be traced without a debug log.

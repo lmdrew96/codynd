@@ -3,6 +3,7 @@ import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import type { ReentryCard } from '../types'
 import {
   DEFAULT_SERVER,
+  PAGE_SIZE,
   STARTUP_RETRY_MS,
   formatElapsed,
   parseAliases,
@@ -50,9 +51,14 @@ const listPatches = async (
   cwd: string,
   aliases: Aliases,
 ): Promise<Patch[]> => {
-  const result = await $.mcp.call(server, 'cp_list_all_patches', args)
-  if (result.isError) throw new Error(result.content.map(b => b.text ?? '').join(' '))
-  return patchesForCwd(parsePatches(result.content.map(b => b.text ?? '').join('')), cwd, aliases)
+  const patches: Patch[] = []
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const result = await $.mcp.call(server, 'cp_list_all_patches', { ...args, limit: PAGE_SIZE, offset })
+    if (result.isError) throw new Error(result.content.map(b => b.text ?? '').join(' '))
+    const page = parsePatches(result.content.map(b => b.text ?? '').join(''))
+    patches.push(...page)
+    if (page.length < PAGE_SIZE) return patchesForCwd(patches, cwd, aliases)
+  }
 }
 
 // Each source fails on its own: a repo with no git history still gets its next step, and vice versa.

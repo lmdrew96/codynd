@@ -3,6 +3,7 @@ import type { On } from 'claude-code'
 import {
   STARTUP_RETRY_MS,
   formatElapsed,
+  parsePatches,
   formatStatus,
   normalize,
   parseAliases,
@@ -28,6 +29,13 @@ const PATCHES: Patch[] = [
 const CWD = '/Users/nae/Desktop/DevelopmentProjects/codynd'
 
 describe('helpers', () => {
+  test('a non-JSON reply fails with what it said, not a parse error', () => {
+    expect(() => parsePatches('Error: MCP tool response exceeds maximum allowed tokens')).toThrow(
+      'Error: MCP tool response exceeds maximum allowed tokens',
+    )
+    expect(parsePatches('[]')).toEqual([])
+  })
+
   test('normalize folds case and punctuation', () => {
     expect(normalize('Chicken Scratch')).toBe(normalize('chicken-scratch'))
     expect(normalize('ChickenScratch')).toBe('chickenscratch')

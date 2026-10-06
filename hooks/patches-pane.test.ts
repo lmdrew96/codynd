@@ -51,10 +51,10 @@ type Seen = {
 
 // ChaosPatch beneath the plugin: one patch in progress, two open; a Done moves #11 out.
 // `failures`: how many ChaosPatch calls fail before it answers.
-const world = (on: On, fried: unknown[] = [], failures = 0): Seen => {
+const world = (on: On, fried: unknown[] = [], failures = 0, others: unknown[] = []): Seen => {
   const seen: Seen = { toolCalls: [], prompts: [], closed: [], toasts: [], sounds: [], statuses: [], clock: mock.clock(on) }
   let inProgress = [row('p11', '#11 /patches', '2026-10-04T03:00:00Z')]
-  const open = [row('p9', '#9 /wins'), row('p10', '#10 /wrap')]
+  const open = [...others, row('p9', '#9 /wins'), row('p10', '#10 /wrap')]
   const review = [row('p12', '#12 review chime', '2026-10-06T22:00:00Z')]
   let failing = failures
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
@@ -66,7 +66,9 @@ const world = (on: On, fried: unknown[] = [], failures = 0): Seen => {
     const { status } = e.args
     const patches =
       Array.isArray(tags) && tags.includes('energy:low') ? fried : status === 'in_progress' ? inProgress : status === 'review' ? review : open
-    return { value: { content: [{ type: 'text', text: JSON.stringify(patches) }], isError: false } }
+    const offset = typeof e.args.offset === 'number' ? e.args.offset : 0
+    const page = typeof e.args.limit === 'number' ? patches.slice(offset, offset + e.args.limit) : patches
+    return { value: { content: [{ type: 'text', text: JSON.stringify(page) }], isError: false } }
   })
   on('tool.call', (_$, e) => {
     seen.toolCalls.push({ ...e })
@@ -169,6 +171,13 @@ describe('/patches', () => {
     const ui = await openBoard($)
     await seen.clock.advance(LOAD_RETRY_MS)
     for (let i = 0; i < 200; i++) await Promise.resolve()
+    expect(await ui.find({ type: 'Text', text: /#9 \/wins/ })).toBeDefined()
+  })
+
+  test('a long cross-project list is read in pages, so patches past the first page still show', async ($, on) => {
+    const elsewhere = Array.from({ length: 70 }, (_, i) => ({ ...row(`s${i}`, `Other ${i}`), project_slug: 'scribecat', project_name: 'ScribeCat' }))
+    world(on, [], 0, elsewhere)
+    const ui = await openBoard($)
     expect(await ui.find({ type: 'Text', text: /#9 \/wins/ })).toBeDefined()
   })
 
