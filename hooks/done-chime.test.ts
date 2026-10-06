@@ -1,6 +1,6 @@
 import { describe, expect, test, type Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { CHIMES, DONE_OPENERS, STOP_TOAST, doneMessage, isCleanStop, isDoneToast, isTestCommand, nextCelebration, patchTitle, pickOther, testRunFailed } from './done-chime.ts'
+import { CHIMES, DONE_OPENERS, STOP_TOAST, doneMessage, isCleanStop, isDoneToast, isTestCommand, nextCelebration, patchTitle, pickOther, reviewMessage, testRunFailed } from './done-chime.ts'
 
 describe('helpers', () => {
   test('reads the title from the completed patch', () => {
@@ -59,9 +59,9 @@ const world = (on: On, answer: { isError: boolean }): Seen => {
 }
 
 // Loosely typed: tsc gives up expanding every connected MCP tool's input types here.
-const completePatch = async ($: Engine): Promise<void> => {
+const completePatch = async ($: Engine, tool = 'cp_complete_patch'): Promise<void> => {
   const callTool = $.tool.call as unknown as (input: { tool: string; patch_id: string }) => Promise<unknown>
-  await callTool({ tool: 'mcp__claude_ai_ChaosPatch__cp_complete_patch', patch_id: 'x' })
+  await callTool({ tool: `mcp__claude_ai_ChaosPatch__${tool}`, patch_id: 'x' })
   // The celebration runs unawaited after the call; let it settle.
   for (let i = 0; i < 200; i++) await Promise.resolve()
 }
@@ -91,11 +91,25 @@ describe('done chime', () => {
     expect(seen.sounds).toEqual([])
   })
 
+  test('a patch sent to review gets its own toast and chime', async ($, on) => {
+    const seen = world(on, { isError: false })
+    await completePatch($, 'cp_request_review')
+    expect(seen.toasts).toEqual(['👀 Ready for review!'])
+    expect(seen.sounds).toEqual(['sounds/review.wav'])
+  })
+
   test('toast only when the sound is turned off', { options: { doneChimeSound: false } }, async ($, on) => {
     const seen = world(on, { isError: false })
     await completePatch($)
     expect(seen.toasts).toEqual(['🎉 Patch done!'])
     expect(seen.sounds).toEqual([])
+  })
+})
+
+describe('review toast', () => {
+  test('names the patch, and holds the line like a done toast', () => {
+    expect(reviewMessage('#2 Done chime')).toBe('👀 Ready for review: #2 Done chime')
+    expect(isDoneToast(reviewMessage(undefined))).toBe(true)
   })
 })
 

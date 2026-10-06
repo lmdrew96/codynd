@@ -6,7 +6,8 @@ import type { EngineInterface, On } from 'claude-code'
 // Built against Claude Code 2.1.289.
 
 const EDIT_TOOL = /^(?:Edit|Write|MultiEdit|NotebookEdit)$/
-const COMPLETE_TOOL = /__cp_complete_patch$/
+// Review ends the active patch as completing does: both close Cody's part and want a note.
+const CLOSE_TOOL = /__cp_(complete_patch|request_review)$/
 
 // Nae's rule list, edited without code. Read once per conversation (again after /clear or compaction).
 export const RULES_FILE = 'rules.md'
@@ -16,6 +17,8 @@ export const PATCH_OR_FOCUS =
   'CodyND reminder: no patch is in progress here and no focus is set. Before more code changes, start the patch (cp_start_patch) or name the work (set_focus).'
 export const COMPLETION_NOTE =
   'CodyND reminder: that patch closed without a completion note. Add one with cp_add_note: what shipped, and the version.'
+export const REVIEW_NOTE =
+  'CodyND reminder: that patch went to review without a note. Add one with cp_add_note: what shipped, the version, and exactly what Nae should check.'
 
 // The same state patch-status.ts and focus.tsx write (atoms are declared per file).
 const activePatches = atom({ plugin: 'codynd', key: 'activePatches' } as const, [])
@@ -45,7 +48,7 @@ const isCovered = async ($: EngineInterface): Promise<boolean> => {
 
 export const registerInstructions = (on: On): void => {
   // Once per topic: cleared with each new conversation (/clear, compaction), when the focus
-  // changes or clears, or when a patch completes.
+  // changes or clears, or when a patch completes or goes to review.
   // Module state: a reload just forgets, which at worst reminds once more.
   let reminded = false
 
@@ -69,11 +72,12 @@ export const registerInstructions = (on: On): void => {
     return { ...ran, context: [...(ran.context ?? []), PATCH_OR_FOCUS] }
   })
 
-  on('tool.call', { tool: COMPLETE_TOOL }, async ($, e, next) => {
+  on('tool.call', { tool: CLOSE_TOOL }, async ($, e, next) => {
     const ran = await next(e)
     if (ran.deny !== undefined || ran.isError === true) return ran
     reminded = false
     if (hasNote((e as { note?: unknown }).note)) return ran
-    return { ...ran, context: [...(ran.context ?? []), COMPLETION_NOTE] }
+    const reminder = e.tool.endsWith('cp_request_review') ? REVIEW_NOTE : COMPLETION_NOTE
+    return { ...ran, context: [...(ran.context ?? []), reminder] }
   })
 }

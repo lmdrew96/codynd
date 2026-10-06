@@ -55,6 +55,7 @@ const world = (on: On, fried: unknown[] = [], failures = 0): Seen => {
   const seen: Seen = { toolCalls: [], prompts: [], closed: [], toasts: [], sounds: [], statuses: [], clock: mock.clock(on) }
   let inProgress = [row('p11', '#11 /patches', '2026-10-04T03:00:00Z')]
   const open = [row('p9', '#9 /wins'), row('p10', '#10 /wrap')]
+  const review = [row('p12', '#12 review chime', '2026-10-06T22:00:00Z')]
   let failing = failures
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('session.cwd', () => ({ value: CWD }))
@@ -62,7 +63,9 @@ const world = (on: On, fried: unknown[] = [], failures = 0): Seen => {
   on('mcp.call', (_$, e) => {
     if (failing-- > 0) return { value: { content: [{ type: 'text', text: 'session expired' }], isError: true } }
     const tags = e.args.tags
-    const patches = Array.isArray(tags) && tags.includes('energy:low') ? fried : e.args.status === 'in_progress' ? inProgress : open
+    const { status } = e.args
+    const patches =
+      Array.isArray(tags) && tags.includes('energy:low') ? fried : status === 'in_progress' ? inProgress : status === 'review' ? review : open
     return { value: { content: [{ type: 'text', text: JSON.stringify(patches) }], isError: false } }
   })
   on('tool.call', (_$, e) => {
@@ -133,6 +136,15 @@ describe('/patches', () => {
     expect(await ui.find({ type: 'Text', text: /#11 \/patches/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /#9 \/wins/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /#10 \/wrap/ })).toBeDefined()
+  })
+
+  test('patches awaiting review get their own section, and Done approves them', async ($, on) => {
+    const seen = world(on)
+    const ui = await openBoard($)
+    expect(await ui.find({ type: 'Text', text: 'Awaiting review' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /#12 review chime/ })).toBeDefined()
+    await ui.press({ key: 'approve-p12' })
+    expect(seen.toolCalls[0]).toMatchObject({ tool: 'mcp__claude_ai_ChaosPatch__cp_complete_patch', patch_id: 'p12' })
   })
 
   test('Done completes through tool.call with consent, then reloads', async ($, on) => {

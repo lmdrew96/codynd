@@ -34,7 +34,7 @@ export type FriedRow = BoardRow & { project: string; isHere: boolean }
 export type FriedBoard = { rows: FriedRow[]; error?: string }
 
 // null while loading; `error` when ChaosPatch couldn't be reached.
-export type Board = { inProgress: BoardRow[]; open: BoardRow[]; error?: string }
+export type Board = { inProgress: BoardRow[]; review: BoardRow[]; open: BoardRow[]; error?: string }
 
 declare module 'claude-code' {
   interface PluginState {

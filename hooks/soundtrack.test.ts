@@ -70,7 +70,7 @@ const run = async ($: Engine, args: string): Promise<string | undefined> =>
   (await $.command.run({ command: 'soundtrack', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 100 } })).text
 
 // Loosely typed: tsc gives up expanding every connected MCP tool's input types here.
-const patchTool = async ($: Engine, tool: 'cp_start_patch' | 'cp_complete_patch'): Promise<void> => {
+const patchTool = async ($: Engine, tool: 'cp_start_patch' | 'cp_complete_patch' | 'cp_request_review'): Promise<void> => {
   const callTool = $.tool.call as unknown as (input: { tool: string; patch_id: string }) => Promise<unknown>
   await callTool({ tool: `mcp__claude_ai_ChaosPatch__${tool}`, patch_id: 'x' })
   await settle()
@@ -108,6 +108,14 @@ describe('/soundtrack', () => {
     expect(scriptsRun(seen)).toEqual(['start', 'fade'])
     // Faded once: a second done has nothing of ours to fade.
     await patchTool($, 'cp_complete_patch')
+    expect(scriptsRun(seen)).toEqual(['start', 'fade'])
+  })
+
+  test('sending a patch to review fades too: it ends Cody\'s part', async ($, on) => {
+    const seen = world(on, { start: 'started', fade: 'faded', exitCode: 0 }, { [SOUNDTRACK_KEY]: true })
+    await start($)
+    await patchTool($, 'cp_start_patch')
+    await patchTool($, 'cp_request_review')
     expect(scriptsRun(seen)).toEqual(['start', 'fade'])
   })
 

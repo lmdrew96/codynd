@@ -7,12 +7,17 @@ import { truncate } from './patch-status.ts'
 // #8 Chime variety: the sound and the toast's opener rotate, never the same twice running.
 // Clean stopping point: after the win, permission to stop when the tree is committed and the
 // last test run passed. Silent otherwise; never a nag.
+// Review: a patch sent to review (cp_request_review) gets its own chime and toast. Cody's part is
+// done but Nae still checks it, so no stopping-point toast.
 // Built against Claude Code 2.1.289.
 
 const COMPLETE_TOOL = /__cp_complete_patch$/
+const REVIEW_TOOL = /__cp_request_review$/
 const BASH_TOOL = /^Bash$/
 // Original synthesized clips. done.wav comes first: a session's first win is always the classic.
 export const CHIMES = ['sounds/done.wav', 'sounds/arpeggio.wav', 'sounds/marimba.wav', 'sounds/blip-ding.wav'] as const
+// A rising fourth, unlike any done chime: "take a look?" rather than "finished".
+export const REVIEW_CHIME = 'sounds/review.wav'
 // patches-pane.tsx shares this through the same atom, so a Done there counts as the last pick too.
 const lastCelebration = atom({ plugin: 'codynd', key: 'lastCelebration' } as const, null)
 // null until a test command runs this session; then whether the latest one failed.
@@ -56,7 +61,7 @@ const cleanStop = async ($: EngineInterface): Promise<boolean> => {
 // Toasts can't be sticky (only a timeout), so the win stays up long enough to actually see.
 export const DONE_TOAST_MS = 10_000
 
-// cp_complete_patch answers with the patch as JSON; anything else gets the generic toast.
+// cp_complete_patch and cp_request_review answer with the patch as JSON; anything else gets the generic toast.
 export const patchTitle = (text: string | undefined): string | undefined => {
   if (text === undefined) return undefined
   try {
@@ -71,7 +76,14 @@ export const patchTitle = (text: string | undefined): string | undefined => {
 // Openers for the done toast; the first is the classic. toast-queue.ts recognizes done toasts by them.
 export const DONE_OPENERS = ['🎉 Patch done', '✨ Shipped', '🌱 One less thing', '🏁 Done and dusted', '💥 Knocked out'] as const
 
-export const isDoneToast = (text: string): boolean => DONE_OPENERS.some(opener => text.startsWith(opener))
+export const REVIEW_OPENER = '👀 Ready for review'
+
+// Done and review toasts both hold the line in toast-queue.ts.
+export const isDoneToast = (text: string): boolean =>
+  text.startsWith(REVIEW_OPENER) || DONE_OPENERS.some(opener => text.startsWith(opener))
+
+export const reviewMessage = (title: string | undefined): string =>
+  title === undefined ? `${REVIEW_OPENER}!` : `${REVIEW_OPENER}: ${truncate(title)}`
 
 export const doneMessage = (title: string | undefined, opener: number = 0): string => {
   const head = DONE_OPENERS[opener] ?? DONE_OPENERS[0]
@@ -125,6 +137,14 @@ export const registerDoneChime = (on: On, options: PluginOptions): void => {
     if (ran.deny !== undefined || ran.isError === true) return ran
     const chime = await announce($, patchTitle(ran.text))
     if (withSound) void playChime($, chime)
+    return ran
+  })
+
+  on('tool.call', { tool: REVIEW_TOOL }, async ($, e, next) => {
+    const ran = await next(e)
+    if (ran.deny !== undefined || ran.isError === true) return ran
+    $.ui.toast(reviewMessage(patchTitle(ran.text)), { timeoutMs: DONE_TOAST_MS })
+    if (withSound) void playChime($, REVIEW_CHIME)
     return ran
   })
 

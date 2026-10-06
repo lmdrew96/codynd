@@ -33,7 +33,7 @@ const STARTUP_RETRIES = 6
 const TICK_MS = 60_000
 const MAX_TITLE = 60
 // Any ChaosPatch call that can change which patch is in progress.
-const PATCH_WRITE_TOOL = /__cp_(start_patch|complete_patch|update_patch|reopen_patch|delete_patch|batch_update)$/
+const PATCH_WRITE_TOOL = /__cp_(start_patch|complete_patch|request_review|update_patch|reopen_patch|delete_patch|batch_update)$/
 
 // "chicken-scratch", "Chicken Scratch" and "ChickenScratch" all become "chickenscratch".
 export const normalize = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]/g, '')

@@ -7,7 +7,8 @@ import type { EngineInterface, On, PluginOptions } from 'claude-code'
 // Built against Claude Code 2.1.289.
 
 const START_TOOL = /__cp_start_patch$/
-const COMPLETE_TOOL = /__cp_complete_patch$/
+// Sending a patch to review ends Cody's part, so it fades the music too.
+const COMPLETE_TOOL = /__cp_(complete_patch|request_review)$/
 
 // Spotify's own Deep Focus.
 export const DEFAULT_PLAYLIST = 'spotify:playlist:37i9dQZF1DWZeKCadgRdKQ'

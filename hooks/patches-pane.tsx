@@ -66,11 +66,12 @@ export const unreachable = (err: unknown): string =>
 const loadBoard = async ($: EngineInterface, server: string, aliases: Aliases, retries = 0): Promise<void> => {
   try {
     const cwd = await $.session.cwd()
-    const [inProgress, open] = await Promise.all([
+    const [inProgress, review, open] = await Promise.all([
       listForRepo($, server, { status: 'in_progress' }, cwd, aliases),
+      listForRepo($, server, { status: 'review' }, cwd, aliases),
       listForRepo($, server, { status: 'open', sort_by: 'priority' }, cwd, aliases),
     ])
-    await update($, board, () => ({ inProgress: toRows(inProgress), open: toRows(open).slice(0, MAX_OPEN) }))
+    await update($, board, () => ({ inProgress: toRows(inProgress), review: toRows(review), open: toRows(open).slice(0, MAX_OPEN) }))
     // Keep the status line in step: it shares this list. patch-status.ts's redraw hook misses writes
     // made in a button press, so draw here with the list just written.
     await update($, activePatches, () => inProgress)
@@ -89,7 +90,7 @@ const loadBoard = async ($: EngineInterface, server: string, aliases: Aliases, r
       await $.clock.sleep(LOAD_RETRY_MS)
       return loadBoard($, server, aliases, retries - 1)
     }
-    await update($, board, () => ({ inProgress: [], open: [], error: unreachable(err) })).catch((e: unknown) =>
+    await update($, board, () => ({ inProgress: [], open: [], review: [], error: unreachable(err) })).catch((e: unknown) =>
       $.ui.log(`patches: showing the error failed: ${e instanceof Error ? e.message : String(e)}`, { to: 'debug' }),
     )
   }
@@ -277,7 +278,7 @@ export const registerPatchesPane = (on: On, options: PluginOptions): void => {
     const shown = await read($, board)
     if (shown === null) return <Text dimColor>Loading this repo's patches…</Text>
     if (shown.error !== undefined) return <Text dimColor>{shown.error}</Text>
-    if (shown.inProgress.length === 0 && shown.open.length === 0) {
+    if (shown.inProgress.length === 0 && shown.review.length === 0 && shown.open.length === 0) {
       return <Text dimColor>No open patches for this repo.</Text>
     }
     return (
@@ -289,6 +290,17 @@ export const registerPatchesPane = (on: On, options: PluginOptions): void => {
               <Text wrap="truncate-end">🩹 {row.title}</Text>
             </Box>
             <Button key={`done-${row.id}`} onPress={() => changePatch($, server, aliases, 'cp_complete_patch', row, 'Done', sound)}>
+              Done
+            </Button>
+          </Box>
+        ))}
+        {shown.review.length > 0 && <Text bold>Awaiting review</Text>}
+        {shown.review.map(row => (
+          <Box key={`rv-${row.id}`} flexDirection="row" gap={1}>
+            <Box flexGrow={1} flexShrink={1}>
+              <Text wrap="truncate-end">👀 {row.title}</Text>
+            </Box>
+            <Button key={`approve-${row.id}`} onPress={() => changePatch($, server, aliases, 'cp_complete_patch', row, 'Done', sound)}>
               Done
             </Button>
           </Box>

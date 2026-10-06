@@ -1,6 +1,6 @@
 import { describe, expect, test, type Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { COMPLETION_NOTE, PATCH_OR_FOCUS, RULES_BLOCK, RULES_FILE, hasNote } from './instructions.ts'
+import { COMPLETION_NOTE, REVIEW_NOTE, PATCH_OR_FOCUS, RULES_BLOCK, RULES_FILE, hasNote } from './instructions.ts'
 
 const RULES = '- Start the patch or set_focus before touching code.\n'
 
@@ -134,6 +134,12 @@ describe('completion note nudge', () => {
     world(on)
     const ran = await callTool($, 'mcp__claude_ai_ChaosPatch__cp_complete_patch', { patch_id: 'x' })
     expect(ran.context).toContain(COMPLETION_NOTE)
+  })
+
+  test('sending to review without a note asks for what to check', async ($, on) => {
+    world(on)
+    const ran = await callTool($, 'mcp__claude_ai_ChaosPatch__cp_request_review', { patch_id: 'x' })
+    expect(ran.context).toContain(REVIEW_NOTE)
   })
 
   test('closing with a note stays quiet', async ($, on) => {
