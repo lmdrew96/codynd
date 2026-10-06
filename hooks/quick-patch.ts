@@ -1,5 +1,5 @@
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
-import { DEFAULT_SERVER, normalize, truncate } from './patch-status.ts'
+import { DEFAULT_SERVER, matchesRepo, parseAliases, truncate, type Aliases } from './patch-status.ts'
 
 // #13 /patch: file a ChaosPatch patch from a rough thought, drafted from the session, without interrupting Cody.
 // Built against Claude Code 2.1.289.
@@ -74,19 +74,18 @@ const draftPatch = async ($: EngineInterface, rough: string): Promise<Draft | un
   return parseDraft(reply.text)
 }
 
-const repoProject = async ($: EngineInterface, server: string): Promise<Project | undefined> => {
+const repoProject = async ($: EngineInterface, server: string, aliases: Aliases): Promise<Project | undefined> => {
   const cwd = await $.session.cwd()
-  const folder = normalize(cwd.split('/').filter(Boolean).pop() ?? '')
   const result = await $.mcp.call(server, 'cp_list_projects', {})
   if (result.isError) throw new Error(textOf(result))
   const projects = JSON.parse(textOf(result)) as Project[]
-  return projects.find(p => normalize(p.slug) === folder || normalize(p.name) === folder)
+  return projects.find(p => matchesRepo(p.slug, p.name, cwd, aliases))
 }
 
 // Runs after the command returns, so the prompt is free at once. Every failure keeps her words on screen.
-const fileQuickPatch = async ($: EngineInterface, server: string, rough: string): Promise<void> => {
+const fileQuickPatch = async ($: EngineInterface, server: string, aliases: Aliases, rough: string): Promise<void> => {
   try {
-    const project = await repoProject($, server)
+    const project = await repoProject($, server, aliases)
     if (project === undefined) {
       $.ui.toast('No ChaosPatch project for this repo; kept your words.')
       $.ui.log(`Not filed (no matching project). Your words: ${rough}`)
@@ -109,6 +108,7 @@ const fileQuickPatch = async ($: EngineInterface, server: string, rough: string)
 
 export const registerQuickPatch = (on: On, options: PluginOptions): void => {
   const server = typeof options.chaospatchServer === 'string' ? options.chaospatchServer : DEFAULT_SERVER
+  const aliases = parseAliases(options.projectAliases)
 
   on('session.start', { isInteractive: true }, async ($, e, next) => {
     const result = await next(e)
@@ -126,7 +126,7 @@ export const registerQuickPatch = (on: On, options: PluginOptions): void => {
     const rough = e.args.trim()
     if (rough === '') return { text: 'Usage: /patch <rough idea>' }
     $.ui.toast('Drafting a patch…')
-    void fileQuickPatch($, server, rough)
+    void fileQuickPatch($, server, aliases, rough)
     return {}
   })
 }

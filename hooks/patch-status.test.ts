@@ -1,6 +1,16 @@
 import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 import type { On } from 'claude-code'
-import { STARTUP_RETRY_MS, formatElapsed, formatStatus, normalize, patchesForCwd, statusLine, stretchSegment, type Patch } from './patch-status.ts'
+import {
+  STARTUP_RETRY_MS,
+  formatElapsed,
+  formatStatus,
+  normalize,
+  parseAliases,
+  patchesForCwd,
+  statusLine,
+  stretchSegment,
+  type Patch,
+} from './patch-status.ts'
 
 const patch = (title: string, project_slug: string, project_name: string, started_at: string): Patch => ({
   title,
@@ -27,6 +37,24 @@ describe('helpers', () => {
     expect(patchesForCwd(PATCHES, CWD).map(p => p.title)).toEqual(['#1 Patch status line'])
     expect(patchesForCwd(PATCHES, '/x/ChickenScratch').map(p => p.title)).toEqual(['Archive mode'])
     expect(patchesForCwd(PATCHES, '/x/unrelated')).toEqual([])
+  })
+
+  test('an alias points a mismatched folder at its project', () => {
+    const site = patch('Fix hero', 'adhdesigns', 'ADHDesigns.dev', '2026-10-06T03:59:01Z')
+    const cwd = '/x/ADHD-AgenticDevHumanDesigns'
+    expect(patchesForCwd([site, ...PATCHES], cwd)).toEqual([])
+    const aliases = parseAliases('ADHD-AgenticDevHumanDesigns=adhdesigns, Other Folder = Chicken Scratch')
+    expect(patchesForCwd([site, ...PATCHES], cwd, aliases).map(p => p.title)).toEqual(['Fix hero'])
+    expect(patchesForCwd(PATCHES, '/x/other-folder', aliases).map(p => p.title)).toEqual(['Archive mode'])
+    // An aliased folder no longer matches its own name; unaliased repos match as before.
+    expect(patchesForCwd(PATCHES, CWD, { codynd: 'adhdesigns' })).toEqual([])
+    expect(patchesForCwd(PATCHES, CWD, aliases).map(p => p.title)).toEqual(['#1 Patch status line'])
+  })
+
+  test('parseAliases skips malformed pairs and non-strings', () => {
+    expect(parseAliases('=x, y=, nope, a=b')).toEqual({ a: 'b' })
+    expect(parseAliases('')).toEqual({})
+    expect(parseAliases(undefined)).toEqual({})
   })
 
   test('status shows the newest patch, counts the rest, truncates long titles', () => {

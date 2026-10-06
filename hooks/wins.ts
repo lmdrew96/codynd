@@ -1,5 +1,5 @@
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
-import { DEFAULT_SERVER, normalize, truncate } from './patch-status.ts'
+import { DEFAULT_SERVER, matchesRepo, parseAliases, truncate, type Aliases } from './patch-status.ts'
 
 // #9 /wins: what got done today. `/wins` for this repo (patches + commits), `/wins-all` for every project's patches,
 // `/wins-week` for every project's patches since Monday.
@@ -13,11 +13,9 @@ const EMPTY = "Nothing closed yet today. Plenty of day left (or not, and that's 
 export const closedSince = (patches: DonePatch[], midnightMs: number): DonePatch[] =>
   patches.filter(p => p.completed_at !== null && Date.parse(p.completed_at) >= midnightMs)
 
-// Same repo matching as the status line: folder name vs project slug or name.
-export const forRepo = (patches: DonePatch[], cwd: string): DonePatch[] => {
-  const folder = normalize(cwd.split('/').filter(Boolean).pop() ?? '')
-  return folder === '' ? [] : patches.filter(p => normalize(p.project_slug) === folder || normalize(p.project_name) === folder)
-}
+// Same repo matching as the status line: folder name (or its alias) vs project slug or name.
+export const forRepo = (patches: DonePatch[], cwd: string, aliases: Aliases = {}): DonePatch[] =>
+  patches.filter(p => matchesRepo(p.project_slug, p.project_name, cwd, aliases))
 
 const section = (heading: string, lines: string[], mark: string): string[] =>
   lines.length === 0 ? [] : [`${heading} (${lines.length})`, ...lines.map(l => `  ${mark} ${truncate(l, 70)}`)]
@@ -113,12 +111,12 @@ const todaysCommits = async ($: EngineInterface, midnightMs: number): Promise<st
   return git.exitCode === 0 ? git.stdout.split('\n').filter(Boolean) : []
 }
 
-const repoWins = async ($: EngineInterface, server: string, midnightMs: number): Promise<string> => {
+const repoWins = async ($: EngineInterface, server: string, aliases: Aliases, midnightMs: number): Promise<string> => {
   const cwd = await $.session.cwd()
   const repo = cwd.split('/').filter(Boolean).pop() ?? cwd
   const commits = await todaysCommits($, midnightMs)
   try {
-    return formatRepoWins(repo, forRepo(await closedSinceMs($, server, midnightMs), cwd), commits)
+    return formatRepoWins(repo, forRepo(await closedSinceMs($, server, midnightMs), cwd, aliases), commits)
   } catch (err) {
     $.ui.log(`wins: ChaosPatch failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
     return formatRepoWins(repo, [], commits, "(Couldn't reach ChaosPatch, so closed patches are missing.)")
@@ -134,10 +132,10 @@ const allWins = async ($: EngineInterface, server: string, midnightMs: number): 
   }
 }
 
-const wins = async ($: EngineInterface, server: string, args: string): Promise<{ text: string }> => {
+const wins = async ($: EngineInterface, server: string, aliases: Aliases, args: string): Promise<{ text: string }> => {
   try {
     const midnightMs = await localMidnight($)
-    return { text: args.trim() === 'all' ? await allWins($, server, midnightMs) : await repoWins($, server, midnightMs) }
+    return { text: args.trim() === 'all' ? await allWins($, server, midnightMs) : await repoWins($, server, aliases, midnightMs) }
   } catch (err) {
     $.ui.log(`wins: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
     return { text: "Couldn't work out when today started, so no wins list this time." }
@@ -146,6 +144,7 @@ const wins = async ($: EngineInterface, server: string, args: string): Promise<{
 
 export const registerWins = (on: On, options: PluginOptions): void => {
   const server = typeof options.chaospatchServer === 'string' ? options.chaospatchServer : DEFAULT_SERVER
+  const aliases = parseAliases(options.projectAliases)
 
   on('session.start', { isInteractive: true }, async ($, e, next) => {
     const result = await next(e)
@@ -156,7 +155,7 @@ export const registerWins = (on: On, options: PluginOptions): void => {
     return result
   })
 
-  on('command.run', { command: 'wins' }, async ($, e) => wins($, server, e.args))
-  on('command.run', { command: 'wins-all' }, async $ => wins($, server, 'all'))
+  on('command.run', { command: 'wins' }, async ($, e) => wins($, server, aliases, e.args))
+  on('command.run', { command: 'wins-all' }, async $ => wins($, server, aliases, 'all'))
   on('command.run', { command: 'wins-week' }, async $ => weekWins($, server))
 }

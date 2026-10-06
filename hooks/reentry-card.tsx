@@ -1,7 +1,17 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import type { ReentryCard } from '../types'
-import { DEFAULT_SERVER, STARTUP_RETRY_MS, formatElapsed, parsePatches, patchesForCwd, truncate, type Patch } from './patch-status.ts'
+import {
+  DEFAULT_SERVER,
+  STARTUP_RETRY_MS,
+  formatElapsed,
+  parseAliases,
+  parsePatches,
+  patchesForCwd,
+  truncate,
+  type Aliases,
+  type Patch,
+} from './patch-status.ts'
 import { wrapKey, type LeftOff } from './wrap.ts'
 
 // #4 Context re-entry card: "last time / next" band above the prompt when a session opens.
@@ -33,10 +43,16 @@ export const pickNext = (inProgress: Patch[], open: Patch[]): ReentryCard['next'
   return upNext === undefined ? null : { title: upNext.title, isInProgress: false }
 }
 
-const listPatches = async ($: EngineInterface, server: string, args: Record<string, unknown>, cwd: string): Promise<Patch[]> => {
+const listPatches = async (
+  $: EngineInterface,
+  server: string,
+  args: Record<string, unknown>,
+  cwd: string,
+  aliases: Aliases,
+): Promise<Patch[]> => {
   const result = await $.mcp.call(server, 'cp_list_all_patches', args)
   if (result.isError) throw new Error(result.content.map(b => b.text ?? '').join(' '))
-  return patchesForCwd(parsePatches(result.content.map(b => b.text ?? '').join('')), cwd)
+  return patchesForCwd(parsePatches(result.content.map(b => b.text ?? '').join('')), cwd, aliases)
 }
 
 // Each source fails on its own: a repo with no git history still gets its next step, and vice versa.
@@ -44,7 +60,7 @@ const listPatches = async ($: EngineInterface, server: string, args: Record<stri
 // If ChaosPatch failed and `retries` remain (only the session-start load has any), the whole card
 // reloads soon so "Up next" can fill in. A reload rather than a merge: a timer's read of the card
 // can be stale. A dismissed card stays hidden; the render checks isHidden.
-const loadCard = async ($: EngineInterface, server: string, retries = 0): Promise<boolean> => {
+const loadCard = async ($: EngineInterface, server: string, aliases: Aliases, retries = 0): Promise<boolean> => {
   const cwd = await $.session.cwd()
   let lastCommit: ReentryCard['lastCommit'] = null
   let leftOff: ReentryCard['leftOff'] = null
@@ -56,13 +72,13 @@ const loadCard = async ($: EngineInterface, server: string, retries = 0): Promis
     $.ui.log(`reentry-card: git failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
   }
   try {
-    const inProgress = await listPatches($, server, { status: 'in_progress' }, cwd)
+    const inProgress = await listPatches($, server, { status: 'in_progress' }, cwd, aliases)
     // patchesForCwd re-sorts by started_at (null for open patches), keeping the priority order.
-    const open = inProgress.length > 0 ? [] : await listPatches($, server, { status: 'open', sort_by: 'priority' }, cwd)
+    const open = inProgress.length > 0 ? [] : await listPatches($, server, { status: 'open', sort_by: 'priority' }, cwd, aliases)
     next = pickNext(inProgress, open)
   } catch (err) {
     $.ui.log(`reentry-card: ChaosPatch failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
-    if (retries > 0) $.clock.after(STARTUP_RETRY_MS, () => void loadCard($, server, retries - 1))
+    if (retries > 0) $.clock.after(STARTUP_RETRY_MS, () => void loadCard($, server, aliases, retries - 1))
   }
   try {
     leftOff = parseLeftOff(await $.store.get(wrapKey(cwd)))
@@ -80,10 +96,11 @@ const hide = async ($: EngineInterface): Promise<void> => {
 
 export const registerReentryCard = (on: On, options: PluginOptions): void => {
   const server = typeof options.chaospatchServer === 'string' ? options.chaospatchServer : DEFAULT_SERVER
+  const aliases = parseAliases(options.projectAliases)
 
   on('session.start', { isInteractive: true }, async ($, e, next) => {
     const result = await next(e)
-    void loadCard($, server, STARTUP_RETRIES)
+    void loadCard($, server, aliases, STARTUP_RETRIES)
     await $.command
       .register({
         name: 'recap',
@@ -96,7 +113,7 @@ export const registerReentryCard = (on: On, options: PluginOptions): void => {
 
   // For a window left open: reload the card fresh and show it until Dismiss or the next prompt.
   on('command.run', { command: 'recap' }, async $ => {
-    if (!(await loadCard($, server))) return { text: 'Nothing to recap here yet.' }
+    if (!(await loadCard($, server, aliases))) return { text: 'Nothing to recap here yet.' }
     await update($, isHidden, () => false)
     return {}
   })

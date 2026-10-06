@@ -43,14 +43,31 @@ export const parsePatches = (text: string): Patch[] => {
   return Array.isArray(parsed) ? (parsed as Patch[]) : []
 }
 
-// A repo matches a project when its folder name equals the project's slug or name.
-export const patchesForCwd = (patches: Patch[], cwd: string): Patch[] => {
-  const folder = normalize(cwd.split('/').filter(Boolean).pop() ?? '')
-  if (folder === '') return []
-  return patches
-    .filter(p => normalize(p.project_slug) === folder || normalize(p.project_name) === folder)
-    .sort((a, b) => (b.started_at ?? '').localeCompare(a.started_at ?? ''))
+// Normalized folder name → normalized project slug or name, for repos whose folder doesn't match.
+export type Aliases = Readonly<Record<string, string>>
+
+// The projectAliases setting: "ADHD-AgenticDevHumanDesigns=adhdesigns, other-folder=other-slug".
+export const parseAliases = (raw: unknown): Aliases => {
+  if (typeof raw !== 'string') return {}
+  const pairs = raw.split(',').flatMap(pair => {
+    const [folder = '', project = ''] = pair.split('=').map(normalize)
+    return folder !== '' && project !== '' ? [[folder, project] as const] : []
+  })
+  return Object.fromEntries(pairs)
 }
+
+// A repo matches a project when its folder name (or that folder's alias) equals the project's slug or name.
+export const matchesRepo = (slug: string, name: string, cwd: string, aliases: Aliases = {}): boolean => {
+  const folder = normalize(cwd.split('/').filter(Boolean).pop() ?? '')
+  if (folder === '') return false
+  const key = aliases[folder] ?? folder
+  return normalize(slug) === key || normalize(name) === key
+}
+
+export const patchesForCwd = (patches: Patch[], cwd: string, aliases: Aliases = {}): Patch[] =>
+  patches
+    .filter(p => matchesRepo(p.project_slug, p.project_name, cwd, aliases))
+    .sort((a, b) => (b.started_at ?? '').localeCompare(a.started_at ?? ''))
 
 export const truncate = (s: string, max = MAX_TITLE): string => (s.length > max ? `${s.slice(0, max - 1)}…` : s)
 
@@ -135,7 +152,7 @@ const draw = async ($: EngineInterface, written?: Written): Promise<void> => {
 
 // Unreachable server or bad response: clear the line, note it in the debug log only, and try
 // again soon while `retries` remain (only the session-start load has any).
-const refresh = async ($: EngineInterface, server: string, retries = 0): Promise<void> => {
+const refresh = async ($: EngineInterface, server: string, aliases: Aliases, retries = 0): Promise<void> => {
   try {
     const [cwd, result] = await Promise.all([
       $.session.cwd(),
@@ -143,7 +160,7 @@ const refresh = async ($: EngineInterface, server: string, retries = 0): Promise
     ])
     if (result.isError) throw new Error(result.content.map(b => b.text ?? '').join(' '))
     const text = result.content.map(b => b.text ?? '').join('')
-    const patches = patchesForCwd(parsePatches(text), cwd)
+    const patches = patchesForCwd(parsePatches(text), cwd, aliases)
     await update($, activePatches, () => patches)
     await draw($, { key: 'activePatches', value: patches })
   } catch (err) {
@@ -152,17 +169,18 @@ const refresh = async ($: EngineInterface, server: string, retries = 0): Promise
       $.ui.log(`patch-status: clearing failed: ${e instanceof Error ? e.message : String(e)}`, { to: 'debug' }),
     )
     await draw($, { key: 'activePatches', value: [] })
-    if (retries > 0) $.clock.after(STARTUP_RETRY_MS, () => void refresh($, server, retries - 1))
+    if (retries > 0) $.clock.after(STARTUP_RETRY_MS, () => void refresh($, server, aliases, retries - 1))
   }
 }
 
 export const registerPatchStatus = (on: On, options: PluginOptions): void => {
   const server = typeof options.chaospatchServer === 'string' ? options.chaospatchServer : DEFAULT_SERVER
+  const aliases = parseAliases(options.projectAliases)
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
-    void refresh($, server, STARTUP_RETRIES)
-    $.clock.every(REFRESH_MS, () => void refresh($, server))
+    void refresh($, server, aliases, STARTUP_RETRIES)
+    $.clock.every(REFRESH_MS, () => void refresh($, server, aliases))
     $.clock.every(TICK_MS, () => void draw($))
     return result
   })
@@ -177,7 +195,7 @@ export const registerPatchStatus = (on: On, options: PluginOptions): void => {
   // the race to Cody's next edit, and the patch-or-focus reminder read the old, empty list.
   on('tool.call', { tool: PATCH_WRITE_TOOL }, async ($, e, next) => {
     const ran = await next(e)
-    await refresh($, server)
+    await refresh($, server, aliases)
     return ran
   })
 }

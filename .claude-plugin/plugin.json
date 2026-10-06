@@ -1,6 +1,6 @@
 {
   "name": "codynd",
-  "version": "0.29.1",
+  "version": "0.29.2",
   "description": "ND-friendly mods for Claude Code: patch status line and friends.",
   "author": {
     "name": "Nae (ADHDesigns)",
@@ -14,6 +14,12 @@
       "title": "ChaosPatch MCP server",
       "description": "The ChaosPatch server's name as /mcp lists it.",
       "default": "claude.ai ChaosPatch"
+    },
+    "projectAliases": {
+      "type": "string",
+      "title": "ChaosPatch project aliases",
+      "description": "For repos whose folder name doesn't match their ChaosPatch project: folder=slug pairs, comma-separated (e.g. ADHD-AgenticDevHumanDesigns=adhdesigns).",
+      "default": ""
     },
     "doneChimeSound": {
       "type": "boolean",

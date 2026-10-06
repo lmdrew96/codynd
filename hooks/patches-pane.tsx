@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, On, PluginOptions } from 'claude-code'
 import type { Board, BoardRow, FriedRow } from '../types'
 import { CHIMES, DONE_TOAST_MS, STOP_TOAST, doneMessage, isCleanStop, nextCelebration } from './done-chime.ts'
-import { DEFAULT_SERVER, parsePatches, patchesForCwd, statusLine, type Patch } from './patch-status.ts'
+import { DEFAULT_SERVER, parseAliases, parsePatches, patchesForCwd, statusLine, type Aliases, type Patch } from './patch-status.ts'
 import { FADE_SCRIPT, SOUNDTRACK_KEY, START_SCRIPT, playlistUri } from './soundtrack.ts'
 
 // #11 /patches: this repo's ChaosPatch board in a pane, driven by buttons, no model turn.
@@ -38,25 +38,31 @@ export const toRows = (patches: Patch[]): BoardRow[] =>
   })
 
 // Low-energy rows from every project; only this repo's can be handed to Cody here.
-export const toFriedRows = (patches: Patch[], cwd: string): FriedRow[] =>
+export const toFriedRows = (patches: Patch[], cwd: string, aliases: Aliases = {}): FriedRow[] =>
   patches.flatMap(p =>
-    toRows([p]).map(row => ({ ...row, project: p.project_name, isHere: patchesForCwd([p], cwd).length > 0 })),
+    toRows([p]).map(row => ({ ...row, project: p.project_name, isHere: patchesForCwd([p], cwd, aliases).length > 0 })),
   )
 
 export const handoffPrompt = (row: BoardRow): string => `Start ChaosPatch patch "${row.title}" (id ${row.id}).`
 
-const listForRepo = async ($: EngineInterface, server: string, args: Record<string, unknown>, cwd: string): Promise<Patch[]> => {
+const listForRepo = async (
+  $: EngineInterface,
+  server: string,
+  args: Record<string, unknown>,
+  cwd: string,
+  aliases: Aliases,
+): Promise<Patch[]> => {
   const result = await $.mcp.call(server, 'cp_list_all_patches', args)
   if (result.isError) throw new Error(result.content.map(b => b.text ?? '').join(' '))
-  return patchesForCwd(parsePatches(result.content.map(b => b.text ?? '').join('')), cwd)
+  return patchesForCwd(parsePatches(result.content.map(b => b.text ?? '').join('')), cwd, aliases)
 }
 
-const loadBoard = async ($: EngineInterface, server: string): Promise<void> => {
+const loadBoard = async ($: EngineInterface, server: string, aliases: Aliases): Promise<void> => {
   try {
     const cwd = await $.session.cwd()
     const [inProgress, open] = await Promise.all([
-      listForRepo($, server, { status: 'in_progress' }, cwd),
-      listForRepo($, server, { status: 'open', sort_by: 'priority' }, cwd),
+      listForRepo($, server, { status: 'in_progress' }, cwd, aliases),
+      listForRepo($, server, { status: 'open', sort_by: 'priority' }, cwd, aliases),
     ])
     await update($, board, () => ({ inProgress: toRows(inProgress), open: toRows(open).slice(0, MAX_OPEN) }))
     // Keep the status line in step: it shares this list. patch-status.ts's redraw hook misses writes
@@ -80,13 +86,13 @@ const loadBoard = async ($: EngineInterface, server: string): Promise<void> => {
 }
 
 // The server filters by tag and sorts by priority; nothing else to do here.
-const loadFried = async ($: EngineInterface, server: string): Promise<void> => {
+const loadFried = async ($: EngineInterface, server: string, aliases: Aliases): Promise<void> => {
   try {
     const cwd = await $.session.cwd()
     const result = await $.mcp.call(server, 'cp_list_all_patches', { status: 'open', tags: ['energy:low'], sort_by: 'priority' })
     if (result.isError) throw new Error(result.content.map(b => b.text ?? '').join(' '))
     const patches = parsePatches(result.content.map(b => b.text ?? '').join(''))
-    await update($, friedBoard, () => ({ rows: toFriedRows(patches, cwd).slice(0, MAX_OPEN) }))
+    await update($, friedBoard, () => ({ rows: toFriedRows(patches, cwd, aliases).slice(0, MAX_OPEN) }))
   } catch (err) {
     $.ui.log(`patches: /fried load failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
     await update($, friedBoard, () => ({ rows: [], error: "Couldn't reach ChaosPatch." })).catch((e: unknown) =>
@@ -155,6 +161,7 @@ type LooseResult = { deny?: string; isError?: boolean }
 const changePatch = async (
   $: EngineInterface,
   server: string,
+  aliases: Aliases,
   tool: string,
   row: BoardRow,
   label: string,
@@ -173,13 +180,13 @@ const changePatch = async (
     // Awaited, sound aside: toasts raised after the press settles skip this plugin's own toast queue.
     if (tool === 'cp_complete_patch') await celebrate($, row.title, sound.chime)
   }
-  await loadBoard($, server)
+  await loadBoard($, server, aliases)
 }
 
 // Start from /fried: the same call as /patches' Start, then this list reloads too.
-const startFried = async ($: EngineInterface, server: string, row: BoardRow, sound: Sound): Promise<void> => {
-  await changePatch($, server, 'cp_start_patch', row, 'Start', sound)
-  await loadFried($, server)
+const startFried = async ($: EngineInterface, server: string, aliases: Aliases, row: BoardRow, sound: Sound): Promise<void> => {
+  await changePatch($, server, aliases, 'cp_start_patch', row, 'Start', sound)
+  await loadFried($, server, aliases)
 }
 
 const handToCody = async ($: EngineInterface, row: BoardRow, pane: string): Promise<void> => {
@@ -190,6 +197,7 @@ const handToCody = async ($: EngineInterface, row: BoardRow, pane: string): Prom
 
 export const registerPatchesPane = (on: On, options: PluginOptions): void => {
   const server = typeof options.chaospatchServer === 'string' ? options.chaospatchServer : DEFAULT_SERVER
+  const aliases = parseAliases(options.projectAliases)
   const sound: Sound = {
     chime: options.doneChimeSound !== false,
     playlist: playlistUri(options.soundtrackPlaylist),
@@ -207,14 +215,14 @@ export const registerPatchesPane = (on: On, options: PluginOptions): void => {
 
   on('command.run', { command: 'patches' }, async $ => {
     await update($, board, () => null)
-    void loadBoard($, server)
+    void loadBoard($, server, aliases)
     await $.ui.open({ id: PANE, title: 'Patches', focus: true, closeOnEscape: true })
     return {}
   })
 
   on('command.run', { command: 'fried' }, async $ => {
     await update($, friedBoard, () => null)
-    void loadFried($, server)
+    void loadFried($, server, aliases)
     await $.ui.open({ id: FRIED_PANE, title: 'Low-energy patches', focus: true, closeOnEscape: true })
     return {}
   })
@@ -237,7 +245,7 @@ export const registerPatchesPane = (on: On, options: PluginOptions): void => {
                   {row.title} <Text dimColor>· {row.project}</Text>
                 </Text>
               </Box>
-              <Button key={`fstart-${row.id}`} onPress={() => startFried($, server, row, sound)}>
+              <Button key={`fstart-${row.id}`} onPress={() => startFried($, server, aliases, row, sound)}>
                 Start
               </Button>
               {row.isHere && (
@@ -269,7 +277,7 @@ export const registerPatchesPane = (on: On, options: PluginOptions): void => {
             <Box flexGrow={1} flexShrink={1}>
               <Text wrap="truncate-end">🩹 {row.title}</Text>
             </Box>
-            <Button key={`done-${row.id}`} onPress={() => changePatch($, server, 'cp_complete_patch', row, 'Done', sound)}>
+            <Button key={`done-${row.id}`} onPress={() => changePatch($, server, aliases, 'cp_complete_patch', row, 'Done', sound)}>
               Done
             </Button>
           </Box>
@@ -281,7 +289,7 @@ export const registerPatchesPane = (on: On, options: PluginOptions): void => {
             <Box flexGrow={1} flexShrink={1}>
               <Text wrap="truncate-end">{row.title}</Text>
             </Box>
-            <Button key={`start-${row.id}`} onPress={() => changePatch($, server, 'cp_start_patch', row, 'Start', sound)}>
+            <Button key={`start-${row.id}`} onPress={() => changePatch($, server, aliases, 'cp_start_patch', row, 'Start', sound)}>
               Start
             </Button>
             <Button key={`cody-${row.id}`} hotkey={String(i + 1)} variant="primary" onPress={() => handToCody($, row, PANE)}>

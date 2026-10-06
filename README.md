@@ -60,7 +60,7 @@ Pick one. Loading it two ways at once loads it twice.
 ## Requirements
 
 - **Claude Code with mod support.** The mod API is early access and can change between releases. CodyND was built against **Claude Code 2.1.289**.
-- **A ChaosPatch MCP server** for the status line, the chime, `/patches`, `/fried`, `/patch`, `/wins`, and the card's "Up next" line. Without one those stay quietly empty; the session clock and the card's "Last time" line still work. A project matches a repo when its slug or name equals the repo's folder name, ignoring case and punctuation (`chicken-scratch` = `Chicken Scratch`).
+- **A ChaosPatch MCP server** for the status line, the chime, `/patches`, `/fried`, `/patch`, `/wins`, and the card's "Up next" line. Without one those stay quietly empty; the session clock and the card's "Last time" line still work. A project matches a repo when its slug or name equals the repo's folder name, ignoring case and punctuation (`chicken-scratch` = `Chicken Scratch`). For a folder named something else, add it to `projectAliases`.
 - **A Kindling MCP server** for `/park`.
 - **A ControlledChaos MCP server** for the next-event countdown.
 - **`/patch`, bare `/wrap`, and `/whatchanged` make one model call** per use: a fork of your session, on the session's model, mostly served from the prompt cache. The error decoder makes one small Haiku call per failed run. Every other mod runs without model calls.
@@ -73,6 +73,7 @@ Change these in `/config` (they're stored under `pluginConfigs.codynd` in your s
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `chaospatchServer` | `claude.ai ChaosPatch` | Your ChaosPatch MCP server's name, as `/mcp` lists it. |
+| `projectAliases` | (empty) | Repos whose folder name doesn't match their ChaosPatch project: `folder=slug` pairs, comma-separated (`ADHD-AgenticDevHumanDesigns=adhdesigns`). |
 | `doneChimeSound` | `true` | Play the chime when a patch is completed. |
 | `landingChimeSound` | `true` | Play the cabin chime with the 15-minute heads-up before your next event. |
 | `attentionChimeSound` | `true` | Play the attention chime when Claude needs you. |
