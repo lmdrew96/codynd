@@ -13,6 +13,8 @@ const PANE = 'codynd-patches'
 const FRIED_PANE = 'codynd-fried'
 export const FRIED_EMPTY = "Nothing tiny queued. Maybe that's your sign to rest 💜"
 const MAX_OPEN = 9
+// One quick retry: a ChaosPatch deploy or reconnect drops a single call that the next one gets through.
+export const LOAD_RETRY_MS = 2_000
 const board = atom({ plugin: 'codynd', key: 'board' } as const, null)
 const friedBoard = atom({ plugin: 'codynd', key: 'friedBoard' } as const, null)
 // The same state as patch-status.ts's activePatches (the validator wants atoms declared per file).
@@ -57,7 +59,11 @@ const listForRepo = async (
   return patchesForCwd(parsePatches(result.content.map(b => b.text ?? '').join('')), cwd, aliases)
 }
 
-const loadBoard = async ($: EngineInterface, server: string, aliases: Aliases): Promise<void> => {
+// The pane shows why, so a failure can be traced without a debug log.
+export const unreachable = (err: unknown): string =>
+  `Couldn't reach ChaosPatch: ${(err instanceof Error ? err.message : String(err)).trim() || 'no reason given'}`
+
+const loadBoard = async ($: EngineInterface, server: string, aliases: Aliases, retries = 0): Promise<void> => {
   try {
     const cwd = await $.session.cwd()
     const [inProgress, open] = await Promise.all([
@@ -79,7 +85,11 @@ const loadBoard = async ($: EngineInterface, server: string, aliases: Aliases): 
     )
   } catch (err) {
     $.ui.log(`patches: load failed: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' })
-    await update($, board, () => ({ inProgress: [], open: [], error: "Couldn't reach ChaosPatch." })).catch((e: unknown) =>
+    if (retries > 0) {
+      await $.clock.sleep(LOAD_RETRY_MS)
+      return loadBoard($, server, aliases, retries - 1)
+    }
+    await update($, board, () => ({ inProgress: [], open: [], error: unreachable(err) })).catch((e: unknown) =>
       $.ui.log(`patches: showing the error failed: ${e instanceof Error ? e.message : String(e)}`, { to: 'debug' }),
     )
   }
@@ -206,7 +216,8 @@ export const registerPatchesPane = (on: On, options: PluginOptions): void => {
 
   on('session.start', { isInteractive: true }, async ($, e, next) => {
     const result = await next(e)
-    await $.command.register({ name: 'patches', description: "Open this repo's ChaosPatch board" })
+    // Immediate: it only opens a pane and reads ChaosPatch, so it needn't wait for Cody's turn to end.
+    await $.command.register({ name: 'patches', description: "Open this repo's ChaosPatch board", immediate: true })
     await $.command
       .register({ name: 'fried', description: 'Low on energy? Open only the easy patches (energy:low), across projects' })
       .catch((err: unknown) => $.ui.log(`patches: /fried not registered: ${err instanceof Error ? err.message : String(err)}`, { to: 'debug' }))
@@ -215,7 +226,7 @@ export const registerPatchesPane = (on: On, options: PluginOptions): void => {
 
   on('command.run', { command: 'patches' }, async $ => {
     await update($, board, () => null)
-    void loadBoard($, server, aliases)
+    void loadBoard($, server, aliases, 1)
     await $.ui.open({ id: PANE, title: 'Patches', focus: true, closeOnEscape: true })
     return {}
   })

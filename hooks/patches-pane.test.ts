@@ -1,6 +1,6 @@
 import { describe, expect, mock, test, type Engine } from 'claude-code/testing'
 import type { On, RenderElement } from 'claude-code'
-import { FRIED_EMPTY, handoffPrompt, mcpToolName, toFriedRows, toRows } from './patches-pane.tsx'
+import { FRIED_EMPTY, LOAD_RETRY_MS, handoffPrompt, mcpToolName, toFriedRows, toRows, unreachable } from './patches-pane.tsx'
 
 const CWD = '/x/codynd'
 const row = (id: string, title: string, started_at: string | null = null) => ({
@@ -19,6 +19,11 @@ describe('helpers', () => {
   test('rows keep id and title, dropping patches without an id', () => {
     const { id: _, ...noId } = row('x', 'no id')
     expect(toRows([row('a', 'A'), noId])).toEqual([{ id: 'a', title: 'A' }])
+  })
+
+  test('the unreachable message carries the reason', () => {
+    expect(unreachable(new Error('session expired '))).toBe("Couldn't reach ChaosPatch: session expired")
+    expect(unreachable(new Error(''))).toBe("Couldn't reach ChaosPatch: no reason given")
   })
 
   test('hand-off prompt names the patch and its id', () => {
@@ -41,18 +46,21 @@ type Seen = {
   toasts: string[]
   sounds: string[]
   statuses: (string | undefined)[]
+  clock: ReturnType<typeof mock.clock>
 }
 
 // ChaosPatch beneath the plugin: one patch in progress, two open; a Done moves #11 out.
-const world = (on: On, fried: unknown[] = []): Seen => {
-  const seen: Seen = { toolCalls: [], prompts: [], closed: [], toasts: [], sounds: [], statuses: [] }
+// `failures`: how many ChaosPatch calls fail before it answers.
+const world = (on: On, fried: unknown[] = [], failures = 0): Seen => {
+  const seen: Seen = { toolCalls: [], prompts: [], closed: [], toasts: [], sounds: [], statuses: [], clock: mock.clock(on) }
   let inProgress = [row('p11', '#11 /patches', '2026-10-04T03:00:00Z')]
   const open = [row('p9', '#9 /wins'), row('p10', '#10 /wrap')]
-  mock.clock(on)
+  let failing = failures
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('session.cwd', () => ({ value: CWD }))
   on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
   on('mcp.call', (_$, e) => {
+    if (failing-- > 0) return { value: { content: [{ type: 'text', text: 'session expired' }], isError: true } }
     const tags = e.args.tags
     const patches = Array.isArray(tags) && tags.includes('energy:low') ? fried : e.args.status === 'in_progress' ? inProgress : open
     return { value: { content: [{ type: 'text', text: JSON.stringify(patches) }], isError: false } }
@@ -142,6 +150,22 @@ describe('/patches', () => {
     expect(seen.toasts).toContain('🎉 Patch done: #11 /patches')
     expect(seen.sounds).toEqual(['sounds/done.wav'])
     expect(seen.statuses.at(-1)).toBe('⏱ <1m in')
+  })
+
+  test('a dropped call is retried once', async ($, on) => {
+    const seen = world(on, [], 2)
+    const ui = await openBoard($)
+    await seen.clock.advance(LOAD_RETRY_MS)
+    for (let i = 0; i < 200; i++) await Promise.resolve()
+    expect(await ui.find({ type: 'Text', text: /#9 \/wins/ })).toBeDefined()
+  })
+
+  test('a lasting failure shows its reason', async ($, on) => {
+    const seen = world(on, [], 99)
+    const ui = await openBoard($)
+    await seen.clock.advance(LOAD_RETRY_MS)
+    for (let i = 0; i < 200; i++) await Promise.resolve()
+    expect(await ui.find({ type: 'Text', text: "Couldn't reach ChaosPatch: session expired" })).toBeDefined()
   })
 
   test('→ Cody closes the pane and queues the hand-off prompt', async ($, on) => {
